@@ -1,0 +1,9 @@
+{
+  "name": "instachecklist",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "py -m http.server 4174 --directory public",
+    "test": "node --check public/app.js"
+  }
+}
