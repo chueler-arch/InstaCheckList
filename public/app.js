@@ -1,7 +1,7 @@
 'use strict';
-const GOOGLE_CLIENT_ID='287824088654-d53qa4ann3a1hq3uj917htsc0c0ormjr.apps.googleusercontent.com';
-const GOOGLE_API_KEY='AIzaSyB5YIk5RUPw0E518259rIc_lN5QhPs3fFM';
-const GOOGLE_APP_ID='287824088654';
+const GOOGLE_CLIENT_ID='30097772627-p5tt4ma2vivtfk7erb2j3912eie0tv3o.apps.googleusercontent.com';
+const GOOGLE_API_KEY='AIzaSyBAYtRW9s0IQEFi4lEU7L9TZZqAKz5AjO0';
+const GOOGLE_APP_ID='30097772627';
 const SCOPE='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile';
 const LOG_SHEET='_InstaCheckList_Log', ITEM_ID_HEADER='_InstaCheckList_ID';
 const $=id=>document.getElementById(id);
