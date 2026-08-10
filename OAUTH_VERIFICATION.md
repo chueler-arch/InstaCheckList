@@ -23,7 +23,7 @@ https://www.googleapis.com/auth/userinfo.profile
 ### drive.file
 
 ```text
-InstaCheckList uses the drive.file scope so a user can explicitly select one Google Spreadsheet through Google Picker. The app reads checklist rows from that selected file and writes device-specific completion timestamps, operator names, unique identifiers, and work notes back to the same file. The app does not need access to other Drive files. The narrower drive.file scope is sufficient because every file is selected by the user through Google Picker.
+InstaCheckList uses the drive.file scope so a user can explicitly select one Google Spreadsheet through Google Picker or create a new checklist Spreadsheet. The app reads checklist rows from that file and writes device-specific completion timestamps, operator names, work notes, and links to user-captured work photos back to it. When the user explicitly takes a work photo, the app creates that image in the user's Google Drive and records its Drive link in the selected Spreadsheet. The app does not need access to unrelated Drive files. The narrower drive.file scope is sufficient because the app only accesses files selected by the user or created by the app.
 ```
 
 ### userinfo.profile

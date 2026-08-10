@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "start": "py -m http.server 4174 --directory public",
-    "test": "node --check public/app.js"
+    "test": "node --check public/app.js && node --check public/create-sheet-init.js && node --check public/features.js"
   }
 }

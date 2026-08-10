@@ -20,12 +20,13 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="app-enhancements.css">
   <link rel="stylesheet" href="google-branding.css">
+  <link rel="stylesheet" href="features.css">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"InstaCheckList","url":"https://instachecklist.sona-craft.com/","description":"機器のシリアル番号を読み取り、Google Spreadsheetで複数ユーザーが現地キッティングを記録・共有するチェックシートWebアプリです。","applicationCategory":"BusinessApplication","operatingSystem":"Any","author":{"@type":"Organization","name":"SONA CRAFT","url":"https://portal.sona-craft.com/"}}</script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand"><img class="logo" src="images/InstaCheckList_ICON.png" alt=""><div><h1>InstaCheckList</h1><small>SCAN · CHECK · COMPLETE</small></div></div>
-    <button id="connectBtn" class="connect">Spreadsheetに接続</button>
+    <div class="topbar-actions"><a id="sheetLinkBtn" class="topbar-tool" href="#" target="_blank" rel="noopener" hidden>Spreadsheetを開く</a><button id="layoutBtn" class="topbar-tool" type="button">レイアウト</button><button id="connectBtn" class="connect">Spreadsheetに接続</button></div>
   </header>
   <main>
     <section id="setup" class="setup card">
@@ -46,19 +47,24 @@
     </section>
 
     <section id="workspace" hidden>
-      <div class="device-bar"><div><small>SERIAL NUMBER</small><strong id="serialLabel"></strong></div><button id="newScanBtn">別の機器</button></div>
+      <div class="device-bar"><div><small>SERIAL NUMBER</small><strong id="serialLabel"></strong></div><div class="device-actions"><button id="filterBtn" type="button">フィルター</button><button id="newScanBtn">別の機器</button></div></div>
       <div id="syncBar" class="sync" data-kind="ready">準備完了</div>
       <div id="progress" class="progress"><span></span></div>
       <div id="checklist" class="checklist"></div>
+      <nav id="pageNav" class="page-nav" aria-label="チェック項目のページ移動" hidden><button id="prevPageBtn" type="button">前へ</button><span id="pageLabel"></span><button id="nextPageBtn" type="button">次へ</button></nav>
       <p id="emptyItems" class="empty" hidden>有効なチェック項目がありません。</p>
     </section>
   </main>
   <footer class="app-footer"><div><nav><a href="how-to-use.html">使い方・ヘルプ</a><a href="about.html">このアプリについて</a><a href="terms.html">利用規約</a><a href="privacy.html">プライバシーポリシー</a><a href="https://portal.sona-craft.com/" target="_blank" rel="noopener">SONA CRAFT</a></nav><small>© SONA CRAFT</small></div></footer>
+  <div id="layoutModal" class="feature-modal" aria-hidden="true"><section class="feature-card" role="dialog" aria-modal="true" aria-labelledby="layoutTitle"><div class="feature-head"><div><span class="eyebrow">LAYOUT</span><h2 id="layoutTitle">レイアウト設定</h2></div><button class="feature-close" data-close-feature="layoutModal" type="button" aria-label="閉じる">×</button></div><fieldset><legend>表示方法</legend><label><input type="radio" name="layoutMode" value="all"> 全工程を1画面で表示</label><label><input type="radio" name="layoutMode" value="group"> 大項目単位で表示</label><label><input type="radio" name="layoutMode" value="single"> 1工程1ページ</label></fieldset><fieldset><legend>チェックボックスの位置</legend><label><input type="radio" name="checkSide" value="left"> 左側</label><label><input type="radio" name="checkSide" value="right"> 右側</label></fieldset><fieldset><legend>チェックボックスのサイズ</legend><label><input type="radio" name="checkSize" value="small"> 小</label><label><input type="radio" name="checkSize" value="medium"> 中</label><label><input type="radio" name="checkSize" value="large"> 大</label></fieldset></section></div>
+  <div id="filterModal" class="feature-modal" aria-hidden="true"><section class="feature-card" role="dialog" aria-modal="true" aria-labelledby="filterTitle"><div class="feature-head"><div><span class="eyebrow">FILTER</span><h2 id="filterTitle">この機器のフィルター</h2></div><button class="feature-close" data-close-feature="filterModal" type="button" aria-label="閉じる">×</button></div><fieldset><legend>作業状態</legend><label><input type="radio" name="workFilter" value="all"> なし</label><label><input type="radio" name="workFilter" value="done"> 作業済</label><label><input type="radio" name="workFilter" value="undone"> 未作業</label></fieldset><fieldset><legend>作業員</legend><label><input type="radio" name="workerFilter" value="all"> 全員</label><label><input type="radio" name="workerFilter" value="mine"> 自分</label><label><input type="radio" name="workerFilter" value="others"> 自分以外</label></fieldset><button id="clearFilterBtn" class="create-sheet-button" type="button">フィルターを解除</button></section></div>
+  <div id="photoModal" class="feature-modal" aria-hidden="true"><section class="feature-card photo-card" role="dialog" aria-modal="true" aria-labelledby="photoTitle"><div class="feature-head"><div><span class="eyebrow">PHOTO</span><h2 id="photoTitle">作業写真を撮影</h2></div><button class="feature-close" data-close-feature="photoModal" type="button" aria-label="閉じる">×</button></div><div class="photo-view"><video id="photoVideo" playsinline muted autoplay></video><p id="photoMessage">カメラを起動しています…</p></div><button id="photoShutterBtn" class="photo-shutter" type="button" aria-label="撮影"></button><p id="photoStatus" class="status" aria-live="polite"></p><canvas id="photoCanvas" hidden></canvas></section></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="vendor/zxing.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
   <script src="app.js"></script>
   <script src="create-sheet-init.js"></script>
+  <script src="features.js"></script>
 </body>
 </html>
