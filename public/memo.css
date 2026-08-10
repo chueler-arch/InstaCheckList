@@ -1,0 +1,9 @@
+.memo-required .item-top,
+.checklist.check-right .memo-required .item-top {
+  grid-template-columns: 1fr;
+}
+
+.memo-required .item-top > div,
+.checklist.check-right .memo-required .item-top > div {
+  grid-column: 1;
+}
