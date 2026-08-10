@@ -5,12 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b1728">
   <meta name="description" content="現地作業向けのリアルタイムチェックシート">
+  <link rel="canonical" href="https://instachecklist.sona-craft.com/">
   <title>InstaCheckList</title>
+  <link rel="icon" href="images/InstaCheckList_ICON.ico" sizes="any">
+  <link rel="icon" type="image/png" href="images/InstaCheckList_ICON.png">
+  <link rel="apple-touch-icon" href="images/InstaCheckList_ICON.png">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="app-enhancements.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="logo">✓</span><div><h1>InstaCheckList</h1><small>SCAN · CHECK · COMPLETE</small></div></div>
+    <div class="brand"><img class="logo" src="images/InstaCheckList_ICON.png" alt=""><div><h1>InstaCheckList</h1><small>SCAN · CHECK · COMPLETE</small></div></div>
     <button id="connectBtn" class="connect">Spreadsheetに接続</button>
   </header>
   <main>
@@ -18,6 +23,7 @@
       <div><span class="eyebrow">SETUP</span><h2>チェックシートを選択</h2><p>Googleアカウントで接続し、作業用Spreadsheetを選択してください。</p></div>
       <button id="selectSheetBtn" class="primary">Google Driveから選択</button>
       <p id="setupStatus" class="status" aria-live="polite">未接続</p>
+      <div class="service-summary"><h2>現地作業を、すぐにチェックシート化</h2><p>InstaCheckListは、機器のシリアル番号を読み取り、利用者が選択したGoogle Spreadsheetの項目から機器ごとのチェックシートを作成するWebアプリです。完了日時、作業者名、固有値、作業メモを同じSpreadsheetへ記録し、複数ユーザーで共有できます。</p><p>Googleアカウント連携は、選択したSpreadsheetの読み書きと作業者名の取得にのみ使用します。データやアクセストークンを本アプリ独自のサーバーへ保存することはありません。</p><a href="privacy.html">Googleユーザーデータの取り扱いを確認</a></div>
     </section>
 
     <section id="scanner" class="scanner card" hidden>
@@ -35,6 +41,7 @@
       <p id="emptyItems" class="empty" hidden>有効なチェック項目がありません。</p>
     </section>
   </main>
+  <footer class="app-footer"><div><nav><a href="how-to-use.html">使い方・ヘルプ</a><a href="about.html">このアプリについて</a><a href="terms.html">利用規約</a><a href="privacy.html">プライバシーポリシー</a><a href="https://portal.sona-craft.com/" target="_blank" rel="noopener">SONA CRAFT</a></nav><small>© SONA CRAFT</small></div></footer>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="vendor/zxing.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>

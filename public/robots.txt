@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://instachecklist.sona-craft.com/sitemap.xml
