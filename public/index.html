@@ -33,6 +33,8 @@
       <div class="google-data-notice"><h3>Googleアカウントを使用する目的</h3><p>Googleアカウント連携は、利用者がGoogle Pickerで選択したSpreadsheetの読み書きと、作業者名としてGoogleプロフィールの表示名を記録するためにのみ使用します。ほかのDriveファイルにはアクセスせず、取得データやアクセストークンをSONA CRAFTの独自サーバーへ保存しません。</p><a href="privacy.html">Googleユーザーデータの取り扱いを確認</a></div>
       <div class="setup-action"><span class="eyebrow">GET STARTED</span><h3>作業用チェックシートを選択</h3><p>Googleアカウントで接続し、使用するSpreadsheetを選択してください。</p></div>
       <button id="selectSheetBtn" class="primary"><img src="https://www.gstatic.com/images/branding/productlogos/drive_2026/v2/web-64dp/logo_drive_2026_color_2x_web_64dp.png" alt="" width="22" height="22"> Google DriveからSpreadsheetを選択</button>
+      <div class="or-divider"><span>または</span></div>
+      <button id="createSheetBtn" class="create-sheet-button" type="button">新しいチェックシートを作成</button>
       <p id="setupStatus" class="status" aria-live="polite">未接続</p>
     </section>
 
@@ -57,5 +59,6 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
   <script src="app.js"></script>
+  <script src="create-sheet-init.js"></script>
 </body>
 </html>
