@@ -2,7 +2,7 @@
 const GOOGLE_CLIENT_ID='30097772627-p5tt4ma2vivtfk7erb2j3912eie0tv3o.apps.googleusercontent.com';
 const GOOGLE_API_KEY='AIzaSyBAYtRW9s0IQEFi4lEU7L9TZZqAKz5AjO0';
 const GOOGLE_APP_ID='30097772627';
-const SCOPE='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile';
+const SCOPE='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile';
 const LOG_SHEET='_InstaCheckList_Log', ITEM_ID_HEADER='_InstaCheckList_ID';
 const $=id=>document.getElementById(id);
 const dom={setup:$('setup'),scanner:$('scanner'),workspace:$('workspace'),connectBtn:$('connectBtn'),selectSheetBtn:$('selectSheetBtn'),changeSheetBtn:$('changeSheetBtn'),setupStatus:$('setupStatus'),video:$('video'),cameraMessage:$('cameraMessage'),serialInput:$('serialInput'),openDeviceBtn:$('openDeviceBtn'),cameraToggleBtn:$('cameraToggleBtn'),newScanBtn:$('newScanBtn'),serialLabel:$('serialLabel'),syncBar:$('syncBar'),progress:$('progress'),checklist:$('checklist'),emptyItems:$('emptyItems'),toast:$('toast')};
