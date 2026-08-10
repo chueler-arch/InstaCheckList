@@ -13,10 +13,11 @@
 
 ```text
 https://www.googleapis.com/auth/drive.file
+https://www.googleapis.com/auth/spreadsheets
 https://www.googleapis.com/auth/userinfo.profile
 ```
 
-`https://www.googleapis.com/auth/spreadsheets` は登録・要求しない。
+`https://www.googleapis.com/auth/spreadsheets` は、共有URLからGoogle Pickerを省略し、共有先アカウントがアクセス権を持つ対象SpreadsheetをIDで直接読み書きするために要求する。
 
 ## Scope justification（申請欄へ貼り付け可能）
 
@@ -24,6 +25,12 @@ https://www.googleapis.com/auth/userinfo.profile
 
 ```text
 InstaCheckList uses the drive.file scope so a user can explicitly select one Google Spreadsheet through Google Picker or create a new checklist Spreadsheet. The app reads checklist rows from that file and writes device-specific completion timestamps, operator names, work notes, and links to user-captured work photos back to it. When the user explicitly takes a work photo, the app creates that image in the user's Google Drive and records its Drive link in the selected Spreadsheet. The app does not need access to unrelated Drive files. The narrower drive.file scope is sufficient because the app only accesses files selected by the user or created by the app.
+```
+
+### spreadsheets
+
+```text
+InstaCheckList uses the spreadsheets scope to open a specific checklist Spreadsheet from a shared app URL containing its Spreadsheet ID, without requiring every field operator to select the same file again in Google Picker. Google sharing permissions remain authoritative: only users who already have access to that Spreadsheet can read or update it. The app uses the scope only for the Spreadsheet explicitly selected, created, or identified by the shared URL, and does not search or list other Spreadsheets.
 ```
 
 ### userinfo.profile

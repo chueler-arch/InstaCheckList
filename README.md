@@ -32,7 +32,7 @@ QRtoQRと同じ設定です。
 - Build output directory: `public`
 - Production branch: `master`（運用ブランチに合わせて変更可）
 
-Google Cloud ConsoleのOAuthクライアントとAPIキーに本番ドメインを追加してください。Google Picker API、Google Sheets API、Google Drive APIを有効化し、OAuth同意画面には `drive.file` と `userinfo.profile` だけを登録します。広い `spreadsheets` スコープは使用しません。
+Google Cloud ConsoleのOAuthクライアントとAPIキーに本番ドメインを追加してください。Google Picker API、Google Sheets API、Google Drive APIを有効化し、OAuth同意画面には `drive.file`、`spreadsheets`、`userinfo.profile` を登録します。`spreadsheets` は、共有URLのSpreadsheet IDからPickerを省略して、Google共有設定で許可されたチェックシートを直接読み書きするために使用します。
 
 ## 重要な設計
 
