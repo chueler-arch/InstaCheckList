@@ -162,4 +162,14 @@
     width: 34px;
     height: 34px;
   }
+
+  .picker-dialog {
+    top: max(16px, env(safe-area-inset-top)) !important;
+    max-height: calc(100dvh - max(32px, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
+  }
+
+  .picker-dialog-content,
+  .picker-dialog-content iframe {
+    max-height: calc(100dvh - max(48px, env(safe-area-inset-top) + env(safe-area-inset-bottom))) !important;
+  }
 }
