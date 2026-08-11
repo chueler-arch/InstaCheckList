@@ -105,6 +105,53 @@
   color: var(--ok);
 }
 
+.drive-start {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: min(100%, 340px);
+}
+
+.connect-menu-wrap {
+  position: relative;
+}
+
+.connect-listbox {
+  position: absolute;
+  z-index: 120;
+  top: calc(100% + 7px);
+  right: 0;
+  width: 150px;
+  padding: 5px;
+  border: 1px solid #8fa5bc;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--navy);
+  box-shadow: 0 10px 28px #0004;
+  font-size: .72rem;
+  font-weight: 750;
+}
+
+.connect-listbox option {
+  padding: 8px;
+  border-radius: 5px;
+}
+
+.storage-flow-card {
+  text-align: center;
+}
+
+.storage-flow-card .primary,
+.storage-flow-card .create-sheet-button {
+  width: min(100%, 340px);
+}
+
+.storage-back {
+  display: block;
+  margin: 14px auto 0;
+}
+
 @media (max-width: 620px) {
   .icon-tool {
     width: 34px;
