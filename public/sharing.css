@@ -79,6 +79,32 @@
   font-size: .55rem;
 }
 
+.folder-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: min(100%, 340px);
+  padding: 11px 15px;
+  border: 1px solid #d2a72d;
+  border-radius: 10px;
+  background: #fff8df;
+  color: #624900;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.folder-status {
+  margin: 7px auto 14px;
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 750;
+}
+
+.folder-status.selected {
+  color: var(--ok);
+}
+
 @media (max-width: 620px) {
   .icon-tool {
     width: 34px;
