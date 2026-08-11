@@ -113,6 +113,11 @@
   width: min(100%, 340px);
 }
 
+.switch-account {
+  display: block;
+  margin: 10px auto 0;
+}
+
 .connect-menu-wrap {
   position: relative;
 }
