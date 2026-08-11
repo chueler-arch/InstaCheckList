@@ -118,6 +118,35 @@
   margin: 10px auto 0;
 }
 
+.item {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.item-photos {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  max-width: 100%;
+}
+
+.page-nav {
+  position: fixed;
+  right: max(10px, calc((100vw - 820px) / 2 + 10px));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  left: max(10px, calc((100vw - 820px) / 2 + 10px));
+  z-index: 40;
+  margin: 0;
+}
+
+#workspace {
+  padding-bottom: 72px;
+}
+
+.photo-view video[poster] {
+  object-fit: contain;
+  background: #06101d;
+}
+
 .connect-menu-wrap {
   position: relative;
 }
