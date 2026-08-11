@@ -16,11 +16,11 @@
   byId('filterBtn').addEventListener('click',()=>openModal('filterModal'));
   byId('shareUrlBtn').addEventListener('click',showShareUrl);
   window.showStorageStep=step=>{byId('storageFolderStep').hidden=step!=='folder';byId('storageFileStep').hidden=step!=='file';byId('storageFlowTitle').textContent=step==='folder'?'保存先を設定':'チェックシートを選択'};
-  byId('driveStartBtn').addEventListener('click',()=>{showStorageStep(requestedSheet()&&state.folderId?'file':'folder');openModal('storageFlowModal')});
+  byId('driveStartBtn').addEventListener('click',async()=>{const button=byId('driveStartBtn');button.disabled=true;setupStatus('Googleアカウントへ接続しています…');try{await waitForGoogle();await authorize();await loadUser();setupStatus('Googleアカウントへ接続しました');showStorageStep(requestedSheet()&&state.folderId?'file':'folder');openModal('storageFlowModal')}catch(e){setupStatus(e.message||'Googleアカウントへ接続できませんでした。',true)}finally{button.disabled=false}});
   byId('changeStorageFolderBtn').addEventListener('click',()=>showStorageStep('folder'));
   const connectSelect=byId('connectActionSelect');
   byId('connectBtn').addEventListener('click',()=>{connectSelect.hidden=!connectSelect.hidden;byId('connectBtn').setAttribute('aria-expanded',String(!connectSelect.hidden));if(!connectSelect.hidden)connectSelect.focus()});
-  connectSelect.addEventListener('change',()=>{const action=connectSelect.value;connectSelect.hidden=true;connectSelect.selectedIndex=-1;byId('connectBtn').setAttribute('aria-expanded','false');if(action==='folder'){openModal('storageFlowModal');showStorageStep('folder');chooseFolder()}else if(action==='file'){openModal('storageFlowModal');if(state.folderId){showStorageStep('file');chooseSheet()}else showStorageStep('folder')}});
+  connectSelect.addEventListener('change',()=>{const action=connectSelect.value;connectSelect.hidden=true;connectSelect.selectedIndex=-1;byId('connectBtn').setAttribute('aria-expanded','false');if(action==='folder'){state.folderSelectionOnly=true;chooseFolder()}else if(action==='file'){openModal('storageFlowModal');if(state.folderId){showStorageStep('file');chooseSheet()}else showStorageStep('folder')}});
   byId('copyShareUrlBtn').addEventListener('click',async()=>{await navigator.clipboard.writeText(byId('shareUrlInput').value);toast('共有URLをコピーしました')});
   function saveLayout(){localStorage.setItem('instachecklist-layout',JSON.stringify({mode:prefs.mode,side:prefs.side,size:prefs.size}))}
   document.querySelectorAll('[name="layoutMode"]').forEach(r=>{r.checked=r.value===prefs.mode;r.addEventListener('change',()=>{prefs.mode=r.value;prefs.page=0;saveLayout();applyFeatures()})});
