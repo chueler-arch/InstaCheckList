@@ -51,6 +51,7 @@
 
     <section id="workspace" hidden>
       <div class="device-bar"><div><small>SERIAL NUMBER</small><strong id="serialLabel"></strong></div><div class="device-actions"><button id="filterBtn" type="button">フィルター</button><button id="newScanBtn">別の機器</button></div></div>
+      <div class="quick-filter" role="group" aria-label="工程の表示フィルター"><button type="button" data-quick-work="all" class="active">ALL</button><button type="button" data-quick-work="undone">未チェック工程</button><button type="button" data-quick-work="done">チェック済工程</button></div>
       <div id="syncBar" class="sync" data-kind="ready">準備完了</div>
       <div id="progress" class="progress"><span></span></div>
       <div id="checklist" class="checklist"></div>

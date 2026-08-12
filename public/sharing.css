@@ -260,6 +260,10 @@
   margin: 14px auto 0;
 }
 
+.quick-filter {display:flex;gap:6px;padding:9px 12px 5px;background:#e9f0f7}
+.quick-filter button {flex:1;padding:7px 5px;border:1px solid #b9c9d9;border-radius:8px;background:#fff;color:#52647a;font-size:.66rem;font-weight:800}
+.quick-filter button.active {border-color:var(--blue);background:var(--blue);color:#fff}
+
 @media (max-width: 620px) {
   .icon-tool {
     width: 34px;
