@@ -2,7 +2,7 @@
   'use strict';
   const PHOTO_SHEET='_InstaCheckList_Photos';
   const saved=JSON.parse(localStorage.getItem('instachecklist-layout')||'null')||{};
-  const prefs={mode:saved.mode||'all',side:saved.side||'left',size:saved.size||'medium',work:'all',worker:'all',page:0};
+  const prefs={mode:saved.mode||'all',side:saved.side||'right',size:saved.size||'medium',work:'all',worker:'all',page:0};
   const photos=new Map();
   const previews=new Map();
   let photoItemId='',photoStream=null,frozenPhotoUrl='',lastPhotoKey='',applying=false;
@@ -68,6 +68,8 @@
   function stopPhotoCamera(){photoStream?.getTracks().forEach(t=>t.stop());photoStream=null;byId('photoVideo').srcObject=null;clearFrozenPhoto();byId('photoMessage').hidden=false}
   function canvasBlob(){const video=byId('photoVideo'),canvas=byId('photoCanvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0);return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('写真を作成できませんでした。')),'image/jpeg',.88))}
   async function uploadPhoto(blob,filename){if(!state.folderId)throw new Error('保存先フォルダが選択されていません。');const boundary=`icl_${Date.now()}`;const metadata=JSON.stringify({name:filename,mimeType:'image/jpeg',parents:[state.folderId]});const body=new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: image/jpeg\r\n\r\n`,blob,`\r\n--${boundary}--`],{type:`multipart/related; boundary=${boundary}`});return api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink,thumbnailLink',{method:'POST',headers:{'Content-Type':`multipart/related; boundary=${boundary}`},body})}
+  window.uploadChecklistPhoto=uploadPhoto;
+  window.createChecklistThumbnail=thumbnailData;
   byId('photoShutterBtn').addEventListener('click',async()=>{const button=byId('photoShutterBtn');button.disabled=true;byId('photoStatus').textContent='Google Driveへ保存しています…';try{const blob=await canvasBlob();freezePhoto(blob);const thumbData=await thumbnailData(blob);await ensurePhotoSheet();const safe=state.serial.replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,50);const file=await uploadPhoto(blob,`InstaCheckList_${safe}_${Date.now()}.jpg`);const date=localDate();await api(sheetsUrl(`/values/${encodeURIComponent(PHOTO_SHEET+'!A:H')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[[state.serial,photoItemId,file.webViewLink||'',file.thumbnailLink||'',file.id,date,state.userName,thumbData]]})});if(!photos.has(photoItemId))photos.set(photoItemId,[]);const index=photos.get(photoItemId).length,entry={url:file.webViewLink||'',thumb:file.thumbnailLink||'',id:file.id,date,user:state.userName,thumbData};photos.get(photoItemId).push(entry);previews.set(previewKey(photoItemId,entry,index),thumbData);applyFeatures();byId('photoStatus').textContent='保存しました';setTimeout(()=>closeModal('photoModal'),500)}catch(e){byId('photoStatus').textContent=e.message||'写真を保存できませんでした。'}finally{button.disabled=false}});
   function validDriveId(id){return /^[\w-]{10,}$/.test(id||'')}
   function requestedSheet(){const id=new URLSearchParams(location.search).get('sheet')||'';return validDriveId(id)?id:''}
