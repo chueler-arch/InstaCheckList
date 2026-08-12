@@ -6,7 +6,7 @@ const SCOPE='https://www.googleapis.com/auth/drive.file https://www.googleapis.c
 const LOG_SHEET='_InstaCheckList_Log', ITEM_ID_HEADER='_InstaCheckList_ID';
 const TEMPLATE_HEADERS=['有効/無効','順番','大項目','中項目/参照値','小項目/参照値','作業指示補足','作業確認','固有値(MACアドレスなど)','作業メモ'];
 const $=id=>document.getElementById(id);
-const dom={setup:$('setup'),scanner:$('scanner'),workspace:$('workspace'),connectBtn:$('connectBtn'),selectSheetBtn:$('selectSheetBtn'),changeSheetBtn:$('changeSheetBtn'),setupStatus:$('setupStatus'),video:$('video'),cameraMessage:$('cameraMessage'),serialInput:$('serialInput'),openDeviceBtn:$('openDeviceBtn'),cameraToggleBtn:$('cameraToggleBtn'),newScanBtn:$('newScanBtn'),serialLabel:$('serialLabel'),syncBar:$('syncBar'),progress:$('progress'),checklist:$('checklist'),emptyItems:$('emptyItems'),toast:$('toast')};
+const dom={setup:$('setup'),scanner:$('scanner'),workspace:$('workspace'),selectSheetBtn:$('selectSheetBtn'),changeSheetBtn:$('changeSheetBtn'),setupStatus:$('setupStatus'),video:$('video'),cameraMessage:$('cameraMessage'),serialInput:$('serialInput'),openDeviceBtn:$('openDeviceBtn'),cameraToggleBtn:$('cameraToggleBtn'),newScanBtn:$('newScanBtn'),serialLabel:$('serialLabel'),syncBar:$('syncBar'),progress:$('progress'),checklist:$('checklist'),emptyItems:$('emptyItems'),toast:$('toast')};
 const state={token:'',expires:0,tokenClient:null,pickerReady:false,spreadsheetId:'',folderId:'',folderName:'',folderSelectionOnly:false,sheetTitle:'',items:[],logs:new Map(),serial:'',userName:'Googleユーザー',stream:null,reader:null,scanning:false,saving:false,pendingReload:false};
 let saveQueue=Promise.resolve();
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
