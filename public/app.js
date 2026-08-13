@@ -712,7 +712,11 @@ async function startCamera() {
     await dom.video.play();
     dom.cameraMessage.hidden = true;
     state.scanning = true;
-    scanLoop();
+    if (isIOSBrowser() || !("BarcodeDetector" in window)) {
+      startZxingScanner();
+    } else {
+      scanLoop();
+    }
   } catch {
     dom.cameraMessage.textContent =
       "カメラを利用できません。手入力してください。";
@@ -720,9 +724,33 @@ async function startCamera() {
 }
 function stopCamera() {
   state.scanning = false;
+  state.reader?.reset?.();
+  state.reader = null;
   state.stream?.getTracks().forEach((t) => t.stop());
   state.stream = null;
   dom.video.srcObject = null;
+}
+function isIOSBrowser() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+function startZxingScanner() {
+  if (!window.ZXing || !state.scanning) {
+    dom.cameraMessage.hidden = false;
+    dom.cameraMessage.textContent = "バーコードを読み取れません。手入力してください。";
+    return;
+  }
+  state.reader?.reset?.();
+  state.reader = new ZXing.BrowserMultiFormatReader();
+  state.reader.decodeFromVideoElementContinuously(dom.video, (result) => {
+    if (!state.scanning || !result) return;
+    const value = result.text || result.getText?.();
+    if (!value) return;
+    dom.serialInput.value = value;
+    state.scanning = false;
+    state.reader?.reset?.();
+    openDevice(value);
+  });
 }
 async function scanLoop() {
   if (!state.scanning) return;
@@ -744,15 +772,6 @@ async function scanLoop() {
       if (codes[0]?.rawValue) {
         dom.serialInput.value = codes[0].rawValue;
         openDevice(codes[0].rawValue);
-        return;
-      }
-    } else if (window.ZXing) {
-      state.reader = state.reader || new ZXing.BrowserMultiFormatReader();
-      const result = await state.reader
-        .decodeOnceFromVideoElement(dom.video)
-        .catch(() => null);
-      if (result) {
-        openDevice(result.text);
         return;
       }
     }
