@@ -56,6 +56,8 @@ const state = {
   stream: null,
   reader: null,
   scanning: false,
+  scanBusy: false,
+  scanTimer: null,
   saving: false,
   pendingReload: false,
 };
@@ -712,11 +714,7 @@ async function startCamera() {
     await dom.video.play();
     dom.cameraMessage.hidden = true;
     state.scanning = true;
-    if (isIOSBrowser() || !("BarcodeDetector" in window)) {
-      startZxingScanner();
-    } else {
-      scanLoop();
-    }
+    state.scanTimer = window.setInterval(scanFrame, 650);
   } catch {
     dom.cameraMessage.textContent =
       "カメラを利用できません。手入力してください。";
@@ -724,41 +722,33 @@ async function startCamera() {
 }
 function stopCamera() {
   state.scanning = false;
+  clearInterval(state.scanTimer);
+  state.scanTimer = null;
   state.reader?.reset?.();
   state.reader = null;
   state.stream?.getTracks().forEach((t) => t.stop());
   state.stream = null;
   dom.video.srcObject = null;
 }
-function isIOSBrowser() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-}
-function startZxingScanner() {
-  if (!window.ZXing || !state.scanning) {
-    dom.cameraMessage.hidden = false;
-    dom.cameraMessage.textContent = "バーコードを読み取れません。手入力してください。";
-    return;
-  }
-  state.reader?.reset?.();
-  state.reader = new ZXing.BrowserMultiFormatReader();
-  state.reader.decodeFromVideoElementContinuously(dom.video, (result) => {
-    if (!state.scanning || !result) return;
-    const value = result.text || result.getText?.();
-    if (!value) return;
-    dom.serialInput.value = value;
-    state.scanning = false;
-    state.reader?.reset?.();
-    openDevice(value);
+function decodeWithQuagga(canvas) {
+  return new Promise((resolve) => {
+    if (!window.Quagga) return resolve("");
+    Quagga.decodeSingle({
+      src: canvas.toDataURL("image/jpeg", 0.92), numOfWorkers: 0, locate: true,
+      inputStream: { size: 1280 }, locator: { patchSize: "medium", halfSample: false },
+      decoder: { readers: ["code_128_reader", "code_39_reader", "ean_reader", "ean_8_reader", "i2of5_reader"] },
+    }, (result) => resolve(result?.codeResult?.code || ""));
   });
 }
-async function scanLoop() {
-  if (!state.scanning) return;
+async function scanFrame() {
+  if (!state.scanning || dom.video.readyState < 2 || state.scanBusy) return;
+  state.scanBusy = true;
+  let rawValue = "";
   try {
-    if ("BarcodeDetector" in window) {
+    if ("BarcodeDetector" in window) try {
       const detector =
-        scanLoop.detector ||
-        (scanLoop.detector = new BarcodeDetector({
+        scanFrame.detector ||
+        (scanFrame.detector = new BarcodeDetector({
           formats: [
             "code_128",
             "code_39",
@@ -769,14 +759,39 @@ async function scanLoop() {
           ],
         }));
       const codes = await detector.detect(dom.video);
-      if (codes[0]?.rawValue) {
-        dom.serialInput.value = codes[0].rawValue;
-        openDevice(codes[0].rawValue);
-        return;
-      }
+      rawValue = codes[0]?.rawValue || "";
+    } catch {}
+    const canvas = document.createElement("canvas");
+    const sourceWidth = dom.video.videoWidth || 640;
+    const sourceHeight = dom.video.videoHeight || 480;
+    const scale = Math.min(1, 1280 / sourceWidth);
+    canvas.width = Math.round(sourceWidth * scale);
+    canvas.height = Math.round(sourceHeight * scale);
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.drawImage(dom.video, 0, 0, canvas.width, canvas.height);
+    if (!rawValue && window.jsQR) {
+      const image = context.getImageData(0, 0, canvas.width, canvas.height);
+      rawValue = window.jsQR(image.data, image.width, image.height)?.data || "";
     }
+    if (!rawValue && window.ZXing) try {
+      if (!state.reader) {
+        const hints = new Map();
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.ITF]);
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        state.reader = new ZXing.MultiFormatReader();
+        state.reader.setHints(hints);
+      }
+      const source = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+      const bitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(source));
+      rawValue = state.reader.decodeWithState(bitmap)?.getText?.() || "";
+    } catch {}
+    if (!rawValue) rawValue = await decodeWithQuagga(canvas);
+    if (!rawValue || !state.scanning) return;
+    dom.serialInput.value = rawValue;
+    stopCamera();
+    openDevice(rawValue);
   } catch {}
-  if (state.scanning) setTimeout(scanLoop, 250);
+  finally { state.scanBusy = false; }
 }
 function moveToNextDevice() {
   state.serial = "";

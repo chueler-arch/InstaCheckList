@@ -30,7 +30,7 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><img class="logo" src="images/InstaCheckList_ICON.png" alt=""><div><h1 id="topbarProjectName">案件名未設定</h1><small>InstaCheckList</small></div></div>
+    <div class="brand"><img class="logo" src="images/InstaCheckList_ICON.png" alt=""><div><h1 id="topbarProjectName" hidden></h1><small>InstaCheckList</small></div></div>
     <div class="topbar-actions"><button id="settingsBtn" class="connect icon-tool" type="button" aria-label="設定" title="設定"><span class="material-symbols-rounded" aria-hidden="true">settings</span></button></div>
   </header>
   <main>
@@ -78,7 +78,9 @@
   <div id="incompleteModal" class="feature-modal" aria-hidden="true"><section class="feature-card" role="dialog" aria-modal="true" aria-labelledby="incompleteTitle"><div class="feature-head"><h2 id="incompleteTitle">未完了の工程があります</h2></div><p>下記の工程は未完了ですが、別の機器へ移動しますか？</p><ul id="incompleteList"></ul><div class="confirm-actions"><button id="cancelNewDeviceBtn" type="button">戻る</button><button id="confirmNewDeviceBtn" class="primary" type="button">別の機器へ移動</button></div></section></div>
   <div id="projectNameModal" class="feature-modal" aria-hidden="true"><section class="feature-card" role="dialog" aria-modal="true" aria-labelledby="projectNameTitle"><div class="feature-head"><div><span class="eyebrow">PROJECT</span><h2 id="projectNameTitle">案件名を設定</h2></div><button class="feature-close" data-close-feature="projectNameModal" type="button" aria-label="閉じる">×</button></div><p>このSpreadsheetで使用する案件名を入力してください。</p><label class="setting-field">案件名<input id="projectNameInput" type="text" autocomplete="off"></label><p id="projectNameStatus" class="status"></p><button id="saveProjectNameBtn" class="primary wide" type="button">案件名を保存</button></section></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="vendor/jsQR.min.js"></script>
   <script src="vendor/zxing.min.js"></script>
+  <script src="vendor/quagga.min.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://apis.google.com/js/api.js" async defer></script>
   <script src="app.js"></script>

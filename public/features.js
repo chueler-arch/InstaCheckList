@@ -475,6 +475,7 @@
     dom.setup.hidden = false;
     dom.serialInput.value = "";
     dom.checklist.innerHTML = "";
+    byId("topbarProjectName").hidden = true;
     document
       .querySelectorAll(".feature-modal.is-open")
       .forEach((m) => closeModal(m.id));

@@ -97,8 +97,8 @@
           }),
       );
     window.checklistProjectName = rule("project").startsWith || "";
-    el("topbarProjectName").textContent =
-      window.checklistProjectName || "案件名未設定";
+    el("topbarProjectName").textContent = window.checklistProjectName || "案件名未設定";
+    el("topbarProjectName").hidden = false;
     renderReferences();
     renderSerialReference();
     if (!window.checklistProjectName) setTimeout(openProjectEditor, 100);
