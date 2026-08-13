@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const PHOTO_SHEET = "_InstaCheckList_Photos";
+  const PHOTO_SHEET = window.InstaCheckListCore.SHEETS.photos;
   const saved =
     JSON.parse(localStorage.getItem("instachecklist-layout") || "null") || {};
   const prefs = {

@@ -5,19 +5,11 @@ const GOOGLE_API_KEY = "AIzaSyBAYtRW9s0IQEFi4lEU7L9TZZqAKz5AjO0";
 const GOOGLE_APP_ID = "30097772627";
 const SCOPE =
   "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.profile";
-const LOG_SHEET = "_InstaCheckList_Log",
-  ITEM_ID_HEADER = "_InstaCheckList_ID";
-const TEMPLATE_HEADERS = [
-  "有効/無効",
-  "順番",
-  "大項目",
-  "中項目/参照値",
-  "小項目/参照値",
-  "作業指示補足",
-  "作業確認",
-  "固有値(MACアドレスなど)",
-  "作業メモ",
-];
+const CHECKLIST_CORE = window.InstaCheckListCore;
+if (!CHECKLIST_CORE) throw new Error("InstaCheckList core could not be loaded.");
+const LOG_SHEET = CHECKLIST_CORE.SHEETS.log,
+  ITEM_ID_HEADER = CHECKLIST_CORE.ITEM_ID_HEADER,
+  TEMPLATE_HEADERS = CHECKLIST_CORE.TEMPLATE_HEADERS;
 const $ = (id) => document.getElementById(id);
 const dom = {
   setup: $("setup"),
@@ -62,6 +54,7 @@ const state = {
   pendingReload: false,
 };
 let saveQueue = Promise.resolve();
+let checklistRepository;
 const esc = (s) =>
   String(s ?? "").replace(
     /[&<>"']/g,
@@ -352,6 +345,23 @@ async function valuesUpdate(range, values) {
     },
   );
 }
+function repository() {
+  if (!checklistRepository) {
+    const Repository = window.InstaCheckListGoogleRepository.GoogleWorkspaceRepository;
+    checklistRepository = new Repository({
+      getSheetTitle: () => state.sheetTitle,
+      valuesGet,
+      valuesUpdate,
+      createId: uuid,
+      batchValuesUpdate: (data) => api(sheetsUrl("/values:batchUpdate"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ valueInputOption: "RAW", data }),
+      }),
+    });
+  }
+  return checklistRepository;
+}
 async function loadWorkbook() {
   const meta = await api(sheetsUrl("?fields=sheets.properties"));
   const visible = meta.sheets.find(
@@ -388,78 +398,10 @@ function uuid() {
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 async function loadItems() {
-  const data = await valuesGet(`${state.sheetTitle}!A:J`);
-  const rows = data.values || [];
-  const expected = [
-    "有効/無効",
-    "順番",
-    "大項目",
-    "中項目/参照値",
-    "小項目/参照値",
-    "作業指示補足",
-    "作業確認",
-    "固有値(MACアドレスなど)",
-    "作業メモ",
-  ];
-  if (
-    !rows[0] ||
-    expected.some((h, i) => String(rows[0][i] || "").trim() !== h)
-  )
-    throw new Error("タイトル行（A1:I1）が指定の形式と一致しません。");
-  const idWrites = [];
-  state.items = rows
-    .slice(1)
-    .map((r, index) => {
-      let id = r[9];
-      if (!id) {
-        id = uuid();
-        idWrites.push({
-          range: `${state.sheetTitle}!J${index + 2}`,
-          values: [[id]],
-        });
-      }
-      return {
-        row: index + 2,
-        id,
-        enabled: /^(有効|true|1|yes|on|✓)$/i.test(String(r[0] || "").trim()),
-        order: r[1] || index + 1,
-        major: r[2] || "",
-        middle: r[3] || "",
-        small: r[4] || "",
-        instruction: r[5] || "",
-        confirm: r[6] || "",
-        uniqueLabel: r[7] || "",
-        memoDefault: r[8] || "",
-      };
-    })
-    .filter((x) => x.enabled)
-    .sort(
-      (a, b) =>
-        Number(a.order) - Number(b.order) ||
-        String(a.order).localeCompare(String(b.order), "ja"),
-    );
-  if (idWrites.length)
-    await api(sheetsUrl("/values:batchUpdate"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ valueInputOption: "RAW", data: idWrites }),
-    });
-  if (rows[0][9] !== ITEM_ID_HEADER)
-    await valuesUpdate(`${state.sheetTitle}!J1`, [[ITEM_ID_HEADER]]);
+  state.items = await repository().listItems();
 }
 async function loadLogs(renderNow = true) {
-  const data = await valuesGet(`${LOG_SHEET}!A:H`);
-  state.logs.clear();
-  (data.values || []).slice(1).forEach((r, index) => {
-    if (String(r[0]) === state.serial)
-      state.logs.set(String(r[1]), {
-        row: index + 2,
-        date: r[2] || "",
-        user: r[3] || "",
-        unique: r[4] || "",
-        memo: r[5] || "",
-      });
-  });
+  state.logs = await repository().listDeviceResults(state.serial);
   if (renderNow) render();
 }
 function render() {

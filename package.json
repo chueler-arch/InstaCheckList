@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "start": "py -m http.server 4174 --directory public",
-    "test": "node --check public/app.js && node --check public/create-sheet-init.js && node --check public/features.js && node --check public/item-settings.js"
+    "test": "node --check public/app.js && node --check public/create-sheet-init.js && node --check public/features.js && node --check public/item-settings.js && node --check public/core/checklist-core.js && node --check public/data/repository-contract.js && node --check public/data/google-workspace-repository.js && node test/checklist-core.test.js"
   }
 }

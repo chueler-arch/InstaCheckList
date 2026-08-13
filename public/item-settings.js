@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const SHEET = "_InstaCheckList_Settings",
+  const SHEET = window.InstaCheckListCore.SHEETS.settings,
     settings = new Map(),
     el = (id) => document.getElementById(id);
   let active = "serial",
