@@ -1,24 +1,384 @@
 (() => {
-'use strict';
-const SHEET='_InstaCheckList_Settings',settings=new Map(),el=id=>document.getElementById(id);let active='serial',reference={},stream=null;window.checklistProjectName='';
-const open=id=>{el(id).classList.add('is-open');el(id).setAttribute('aria-hidden','false')},close=id=>{el(id).classList.remove('is-open');el(id).setAttribute('aria-hidden','true');if(id==='referenceCameraModal')stopCamera()};
-el('layoutModal').querySelector('.feature-card').append(el('extraLayoutSettings').content.cloneNode(true));el('itemSettingsModal').querySelector('fieldset').before(el('extraValidationFields').content.cloneNode(true));
-const rule=id=>settings.get(id)||{};
-function validate(label,value,r){const errors=[],length=Number(r.length)||0;if(length&&[...value].length!==length)errors.push(`文字数が${length}文字ではありません（現在${[...value].length}文字）。`);if(r.startsWith&&!value.startsWith(r.startsWith))errors.push(`先頭が「${r.startsWith}」ではありません。`);if(r.includes&&!value.includes(r.includes))errors.push(`「${r.includes}」が含まれていません。`);if(r.endsWith&&!value.endsWith(r.endsWith))errors.push(`末尾が「${r.endsWith}」ではありません。`);if(r.regex){try{if(!new RegExp(r.regex).test(value))errors.push(`正規表現「${r.regex}」に一致しません。`)}catch{errors.push('正規表現設定が正しくありません。')}}return errors.length?`${label}：${errors.join(' ')}`:''}
-window.validateSerial=value=>validate('シリアル番号',value,rule('serial'));window.validateItemValue=(id,value)=>validate('固有値',value,rule(id));
-async function ensure(){const meta=await api(sheetsUrl('?fields=sheets.properties'));if(!meta.sheets.some(s=>s.properties.title===SHEET))await batchUpdate([{addSheet:{properties:{title:SHEET,hidden:true}}}]);await valuesUpdate(`${SHEET}!A1:I1`,[['設定ID','文字数','正規表現','参考画像ファイルID','参考画像URL','参考画像サムネイル','前方一致','中間一致','後方一致']])}
-window.loadChecklistSettings=async()=>{if(!state.spreadsheetId)return;await ensure();const data=await valuesGet(`${SHEET}!A:I`);settings.clear();(data.values||[]).slice(1).forEach((r,i)=>r[0]&&settings.set(String(r[0]),{row:i+2,length:r[1]||'',regex:r[2]||'',imageId:r[3]||'',imageUrl:r[4]||'',thumbData:r[5]||'',startsWith:r[6]||'',includes:r[7]||'',endsWith:r[8]||''}));window.checklistProjectName=rule('project').startsWith||'';el('topbarProjectName').textContent=window.checklistProjectName||'案件名未設定';renderReferences();renderSerialReference();if(!window.checklistProjectName)setTimeout(openProjectEditor,100)};
-function openProjectEditor(){el('projectNameInput').value=window.checklistProjectName;el('projectNameStatus').textContent='';open('projectNameModal')}async function saveProjectName(){const name=el('projectNameInput').value.trim();if(!name)return el('projectNameStatus').textContent='案件名を入力してください。';try{await ensure();const old=settings.get('project'),row=['project','','','','','',name,'',''];if(old?.row)await valuesUpdate(`${SHEET}!A${old.row}:I${old.row}`,[row]);else await api(sheetsUrl(`/values/${encodeURIComponent(SHEET+'!A:I')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[row]})});window.checklistProjectName=name;el('topbarProjectName').textContent=name;close('projectNameModal')}catch(e){el('projectNameStatus').textContent=e.message||'保存できませんでした。'}}
-function showEditor(id){active=id;const item=state.items.find(i=>i.id===id),r=rule(id),serial=id==='serial';el('itemSettingsTitle').textContent=serial?'シリアル番号の入力規則':'工程設定';el('itemSettingsName').textContent=serial?'カメラ読取・手入力の両方に適用します。':item?.small||item?.middle||'名称未設定';el('itemTextFields').hidden=serial;if(item){el('itemTitleInput').value=item.small||item.middle||'';el('itemDescriptionInput').value=item.instruction||''}el('itemLengthInput').value=r.length||'';el('itemRegexInput').value=r.regex||'';el('itemStartsWithInput').value=r.startsWith||'';el('itemIncludesInput').value=r.includes||'';el('itemEndsWithInput').value=r.endsWith||'';reference={id:r.imageId||'',url:r.imageUrl||'',thumbData:r.thumbData||''};el('itemSettingsStatus').textContent='';updatePreview();open('itemSettingsModal')}
-function updatePreview(){const image=el('itemReferencePreview');if(reference.thumbData){image.src=reference.thumbData;image.hidden=false}else{image.hidden=true;image.removeAttribute('src')}el('clearReferenceImageBtn').hidden=!reference.id&&!reference.thumbData}
-async function save(){const length=el('itemLengthInput').value.trim(),regex=el('itemRegexInput').value.trim(),status=el('itemSettingsStatus');if(length&&Number(length)<1)return status.textContent='文字数は1以上で指定してください。';try{if(regex)new RegExp(regex)}catch(e){return status.textContent=`正規表現が正しくありません: ${e.message}`}status.textContent='保存しています…';try{if(active!=='serial'){await loadItems();const item=state.items.find(i=>i.id===active);if(!item)throw new Error('工程が見つかりません。');await valuesUpdate(`${state.sheetTitle}!E${item.row}:F${item.row}`,[[el('itemTitleInput').value.trim(),el('itemDescriptionInput').value.trim()]])}await ensure();const old=settings.get(active),row=[active,length,regex,reference.id||'',reference.url||'',reference.thumbData||'',el('itemStartsWithInput').value,el('itemIncludesInput').value,el('itemEndsWithInput').value];if(old?.row)await valuesUpdate(`${SHEET}!A${old.row}:I${old.row}`,[row]);else await api(sheetsUrl(`/values/${encodeURIComponent(SHEET+'!A:I')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[row]})});await loadItems();await window.loadChecklistSettings();if(state.serial)await loadLogs();else render();status.textContent='保存しました';setTimeout(()=>close('itemSettingsModal'),350)}catch(e){status.textContent=e.message||'保存できませんでした。'}}
-function renderReferences(){document.querySelectorAll('.item').forEach(card=>{const r=rule(card.dataset.id);card.querySelector('.item-reference')?.remove();if(!r.thumbData&&!r.imageUrl)return;const a=document.createElement('a');a.className='item-reference';a.href=r.imageUrl||'#';a.target='_blank';a.rel='noopener';a.innerHTML=r.thumbData?`<img src="${r.thumbData}" alt="参考画像"><span>参考画像</span>`:'<span>参考画像をDriveで開く</span>';if(r.thumbData)a.querySelector('img').addEventListener('click',e=>{e.preventDefault();window.showImagePreview(r.thumbData)});card.querySelector('.item-top>div:last-child').append(a)})}
-function renderSerialReference(){const host=el('serialReference'),r=rule('serial');host.innerHTML=r.thumbData?`<button class="serial-reference-button" type="button"><img src="${r.thumbData}" alt="シリアル番号の参考画像"><span>読み取り位置の参考画像</span></button>`:'';host.querySelector('button')?.addEventListener('click',()=>window.showImagePreview(r.thumbData))}
-function addEditors(){document.querySelectorAll('.item').forEach(card=>{if(card.querySelector('.item-edit'))return;const h=card.querySelector('h3');if(!h)return;const b=document.createElement('button');b.className='item-edit';b.type='button';b.innerHTML='<span class="material-symbols-rounded">edit</span>';b.title='工程設定を編集';b.addEventListener('click',()=>showEditor(card.dataset.id));h.after(b)});renderReferences()}
-new MutationObserver(addEditors).observe(el('checklist'),{childList:true});
-async function pick(){if(!state.folderId)return toast('先に保存先フォルダを選択してください。');await authorize();initGoogle();const view=new google.picker.DocsView().setMimeTypes('image/png,image/jpeg,image/webp,image/gif').setParent(state.folderId);new google.picker.PickerBuilder().addView(view).setOAuthToken(state.token).setDeveloperKey(GOOGLE_API_KEY).setAppId(GOOGLE_APP_ID).setOrigin(location.origin).setCallback(async d=>{if(d.action!==google.picker.Action.PICKED)return;try{const file=await driveFile(d.docs[0].id,'id,webViewLink'),res=await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}?alt=media&supportsAllDrives=true`,{headers:{Authorization:`Bearer ${state.token}`}});if(!res.ok)throw new Error('画像を読み込めませんでした。');reference={id:file.id,url:file.webViewLink||'',thumbData:await window.createChecklistThumbnail(await res.blob())};updatePreview()}catch(e){el('itemSettingsStatus').textContent=e.message}}).build().setVisible(true)}
-async function startCamera(){close('itemSettingsModal');open('referenceCameraModal');try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});el('referenceVideo').srcObject=stream;await el('referenceVideo').play()}catch{toast('カメラを利用できません。')}}function stopCamera(){stream?.getTracks().forEach(t=>t.stop());stream=null}
-async function capture(){const v=el('referenceVideo'),c=el('referenceCanvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.9));stopCamera();close('referenceCameraModal');open('itemSettingsModal');try{const file=await window.uploadChecklistPhoto(blob,`InstaCheckList_reference_${Date.now()}.jpg`);reference={id:file.id,url:file.webViewLink||'',thumbData:await window.createChecklistThumbnail(blob)};updatePreview()}catch(e){el('itemSettingsStatus').textContent=e.message}}
-el('serialSettingsBtn').onclick=()=>showEditor('serial');el('saveItemSettingsBtn').onclick=save;el('selectReferenceImageBtn').onclick=pick;el('captureReferenceImageBtn').onclick=startCamera;el('referenceShutterBtn').onclick=capture;el('clearReferenceImageBtn').onclick=()=>{reference={};updatePreview()};
-el('saveProjectNameBtn').onclick=saveProjectName;
+  "use strict";
+  const SHEET = "_InstaCheckList_Settings",
+    settings = new Map(),
+    el = (id) => document.getElementById(id);
+  let active = "serial",
+    reference = {},
+    stream = null;
+  window.checklistProjectName = "";
+  const open = (id) => {
+      el(id).classList.add("is-open");
+      el(id).setAttribute("aria-hidden", "false");
+    },
+    close = (id) => {
+      el(id).classList.remove("is-open");
+      el(id).setAttribute("aria-hidden", "true");
+      if (id === "referenceCameraModal") stopCamera();
+    };
+  el("layoutModal")
+    .querySelector(".feature-card")
+    .append(el("extraLayoutSettings").content.cloneNode(true));
+  const itemModal = el("itemSettingsModal"),
+    referenceFieldset = itemModal.querySelector("fieldset");
+  itemModal.querySelector("#itemTextFields").after(referenceFieldset);
+  referenceFieldset.after(el("extraValidationFields").content.cloneNode(true));
+  el("itemLengthInput").closest("label").hidden = true;
+  el("itemRegexInput").closest("label").hidden = true;
+  const rule = (id) => settings.get(id) || {};
+  function validate(label, value, r) {
+    const errors = [],
+      length = Number(r.length) || 0;
+    if (length && [...value].length !== length)
+      errors.push(
+        `文字数が${length}文字ではありません（現在${[...value].length}文字）。`,
+      );
+    if (r.startsWith && !value.startsWith(r.startsWith))
+      errors.push(`先頭が「${r.startsWith}」ではありません。`);
+    if (r.includes && !value.includes(r.includes))
+      errors.push(`「${r.includes}」が含まれていません。`);
+    if (r.endsWith && !value.endsWith(r.endsWith))
+      errors.push(`末尾が「${r.endsWith}」ではありません。`);
+    if (r.regex) {
+      try {
+        if (!new RegExp(r.regex).test(value))
+          errors.push(`正規表現「${r.regex}」に一致しません。`);
+      } catch {
+        errors.push("正規表現設定が正しくありません。");
+      }
+    }
+    return errors.length ? `${label}：${errors.join(" ")}` : "";
+  }
+  window.validateSerial = (value) =>
+    validate("シリアル番号", value, rule("serial"));
+  window.validateItemValue = (id, value) => validate("固有値", value, rule(id));
+  async function ensure() {
+    const meta = await api(sheetsUrl("?fields=sheets.properties"));
+    if (!meta.sheets.some((s) => s.properties.title === SHEET))
+      await batchUpdate([
+        { addSheet: { properties: { title: SHEET, hidden: true } } },
+      ]);
+    await valuesUpdate(`${SHEET}!A1:J1`, [
+      [
+        "設定ID",
+        "文字数",
+        "正規表現",
+        "参考画像ファイルID",
+        "参考画像URL",
+        "参考画像サムネイル",
+        "前方一致",
+        "中間一致",
+        "後方一致",
+        "操作種別",
+      ],
+    ]);
+  }
+  window.loadChecklistSettings = async () => {
+    if (!state.spreadsheetId) return;
+    await ensure();
+    const data = await valuesGet(`${SHEET}!A:J`);
+    settings.clear();
+    (data.values || [])
+      .slice(1)
+      .forEach(
+        (r, i) =>
+          r[0] &&
+          settings.set(String(r[0]), {
+            row: i + 2,
+            length: r[1] || "",
+            regex: r[2] || "",
+            imageId: r[3] || "",
+            imageUrl: r[4] || "",
+            thumbData: r[5] || "",
+            startsWith: r[6] || "",
+            includes: r[7] || "",
+            endsWith: r[8] || "",
+            action: r[9] || "",
+          }),
+      );
+    window.checklistProjectName = rule("project").startsWith || "";
+    el("topbarProjectName").textContent =
+      window.checklistProjectName || "案件名未設定";
+    renderReferences();
+    renderSerialReference();
+    if (!window.checklistProjectName) setTimeout(openProjectEditor, 100);
+  };
+  function openProjectEditor() {
+    el("projectNameInput").value = window.checklistProjectName;
+    el("projectNameStatus").textContent = "";
+    open("projectNameModal");
+  }
+  async function saveProjectName() {
+    const name = el("projectNameInput").value.trim();
+    if (!name)
+      return (el("projectNameStatus").textContent =
+        "案件名を入力してください。");
+    try {
+      await ensure();
+      const old = settings.get("project"),
+        row = ["project", "", "", "", "", "", name, "", ""];
+      if (old?.row)
+        await valuesUpdate(`${SHEET}!A${old.row}:I${old.row}`, [row]);
+      else
+        await api(
+          sheetsUrl(
+            `/values/${encodeURIComponent(SHEET + "!A:I")}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+          ),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ values: [row] }),
+          },
+        );
+      window.checklistProjectName = name;
+      el("topbarProjectName").textContent = name;
+      close("projectNameModal");
+    } catch (e) {
+      el("projectNameStatus").textContent =
+        e.message || "保存できませんでした。";
+    }
+  }
+  function showEditor(id) {
+    active = id;
+    const item = state.items.find((i) => i.id === id),
+      r = rule(id),
+      serial = id === "serial";
+    el("itemSettingsTitle").textContent = serial
+      ? "シリアル番号の入力規則"
+      : "工程設定";
+    el("itemSettingsName").textContent = serial
+      ? "カメラ読取・手入力の両方に適用します。"
+      : item?.small || item?.middle || "名称未設定";
+    el("itemTextFields").hidden = serial;
+    if (item) {
+      el("itemTitleInput").value = item.small || item.middle || "";
+      el("itemDescriptionInput").value = item.instruction || "";
+    }
+    const defaultAction=item&&/^(true|1|yes|on)$/i.test(String(item.uniqueLabel).trim())?"input":"check",action=serial?"input":r.action||defaultAction;
+    document.querySelector(`[name="itemAction"][value="${action}"]`).checked=true;
+    el("itemActionType").hidden=serial;el("itemValidationFields").hidden=action!=="input";
+    el("itemLengthInputMoved").value = r.length || "";
+    el("itemRegexInputMoved").value = r.regex || "";
+    el("itemStartsWithInput").value = r.startsWith || "";
+    el("itemIncludesInput").value = r.includes || "";
+    el("itemEndsWithInput").value = r.endsWith || "";
+    reference = {
+      id: r.imageId || "",
+      url: r.imageUrl || "",
+      thumbData: r.thumbData || "",
+    };
+    el("itemSettingsStatus").textContent = "";
+    updatePreview();
+    open("itemSettingsModal");
+  }
+  function updatePreview() {
+    const image = el("itemReferencePreview");
+    if (reference.thumbData) {
+      image.src = reference.thumbData;
+      image.hidden = false;
+    } else {
+      image.hidden = true;
+      image.removeAttribute("src");
+    }
+    el("clearReferenceImageBtn").hidden = !reference.id && !reference.thumbData;
+  }
+  async function save() {
+    const length = el("itemLengthInputMoved").value.trim(),
+      regex = el("itemRegexInputMoved").value.trim(),
+      status = el("itemSettingsStatus");
+    if (length && Number(length) < 1)
+      return (status.textContent = "文字数は1以上で指定してください。");
+    try {
+      if (regex) new RegExp(regex);
+    } catch (e) {
+      return (status.textContent = `正規表現が正しくありません: ${e.message}`);
+    }
+    status.textContent = "保存しています…";
+    try {
+      if (active !== "serial") {
+        await loadItems();
+        const item = state.items.find((i) => i.id === active);
+        if (!item) throw new Error("工程が見つかりません。");
+        await valuesUpdate(`${state.sheetTitle}!E${item.row}:F${item.row}`, [
+          [
+            el("itemTitleInput").value.trim(),
+            el("itemDescriptionInput").value.trim(),
+          ],
+        ]);
+      }
+      await ensure();
+      const action=active==='serial'?'input':document.querySelector('[name="itemAction"]:checked').value,old = settings.get(active),
+        row = [
+          active,
+          length,
+          regex,
+          reference.id || "",
+          reference.url || "",
+          reference.thumbData || "",
+          el("itemStartsWithInput").value,
+          el("itemIncludesInput").value,
+          el("itemEndsWithInput").value,action,
+        ];
+      if (old?.row)
+        await valuesUpdate(`${SHEET}!A${old.row}:J${old.row}`, [row]);
+      else
+        await api(
+          sheetsUrl(
+            `/values/${encodeURIComponent(SHEET + "!A:J")}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+          ),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ values: [row] }),
+          },
+        );
+      await loadItems();
+      await window.loadChecklistSettings();
+      if (state.serial) await loadLogs();
+      else render();
+      status.textContent = "保存しました";
+      setTimeout(() => close("itemSettingsModal"), 350);
+    } catch (e) {
+      status.textContent = e.message || "保存できませんでした。";
+    }
+  }
+  function renderReferences() {
+    document.querySelectorAll(".item").forEach((card) => {
+      const r = rule(card.dataset.id);
+      card.querySelector(".item-reference")?.remove();
+      if (!r.thumbData && !r.imageUrl) return;
+      const a = document.createElement("a");
+      a.className = "item-reference";
+      a.href = r.imageUrl || "#";
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.innerHTML = r.thumbData
+        ? `<img src="${r.thumbData}" alt="参考画像"><span>参考画像</span>`
+        : "<span>参考画像をDriveで開く</span>";
+      if (r.thumbData)
+        a.querySelector("img").addEventListener("click", (e) => {
+          e.preventDefault();
+          window.showImagePreview(r.thumbData);
+        });
+      card.querySelector(".item-top>div:last-child").append(a);
+    });
+  }
+  function renderSerialReference() {
+    const host = el("serialReference"),
+      r = rule("serial");
+    host.innerHTML = r.thumbData
+      ? `<button class="serial-reference-button" type="button"><img src="${r.thumbData}" alt="シリアル番号の参考画像"><span>読み取り位置の参考画像</span></button>`
+      : "";
+    host
+      .querySelector("button")
+      ?.addEventListener("click", () => window.showImagePreview(r.thumbData));
+  }
+  function addEditors() {
+    document.querySelectorAll(".item").forEach((card) => {
+      if (card.querySelector(".item-edit")) return;
+      const h = card.querySelector("h3");
+      if (!h) return;
+      const b = document.createElement("button");
+      b.className = "item-edit";
+      b.type = "button";
+      b.innerHTML = '<span class="material-symbols-rounded">edit</span>';
+      b.title = "工程設定を編集";
+      b.addEventListener("click", () => showEditor(card.dataset.id));
+      h.after(b);
+    });
+    renderReferences();
+  }
+  new MutationObserver(addEditors).observe(el("checklist"), {
+    childList: true,
+  });
+  async function pick() {
+    if (!state.folderId) return toast("先に保存先フォルダを選択してください。");
+    await authorize();
+    initGoogle();
+    const view = new google.picker.DocsView()
+      .setMimeTypes("image/png,image/jpeg,image/webp,image/gif")
+      .setParent(state.folderId);
+    new google.picker.PickerBuilder()
+      .addView(view)
+      .setOAuthToken(state.token)
+      .setDeveloperKey(GOOGLE_API_KEY)
+      .setAppId(GOOGLE_APP_ID)
+      .setOrigin(location.origin)
+      .setCallback(async (d) => {
+        if (d.action !== google.picker.Action.PICKED) return;
+        try {
+          const file = await driveFile(d.docs[0].id, "id,webViewLink"),
+            res = await fetch(
+              `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(file.id)}?alt=media&supportsAllDrives=true`,
+              { headers: { Authorization: `Bearer ${state.token}` } },
+            );
+          if (!res.ok) throw new Error("画像を読み込めませんでした。");
+          reference = {
+            id: file.id,
+            url: file.webViewLink || "",
+            thumbData: await window.createChecklistThumbnail(await res.blob()),
+          };
+          updatePreview();
+        } catch (e) {
+          el("itemSettingsStatus").textContent = e.message;
+        }
+      })
+      .build()
+      .setVisible(true);
+  }
+  async function startCamera() {
+    close("itemSettingsModal");
+    open("referenceCameraModal");
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      el("referenceVideo").srcObject = stream;
+      await el("referenceVideo").play();
+    } catch {
+      toast("カメラを利用できません。");
+    }
+  }
+  function stopCamera() {
+    stream?.getTracks().forEach((t) => t.stop());
+    stream = null;
+  }
+  async function capture() {
+    const v = el("referenceVideo"),
+      c = el("referenceCanvas");
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext("2d").drawImage(v, 0, 0);
+    const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.9));
+    stopCamera();
+    close("referenceCameraModal");
+    open("itemSettingsModal");
+    try {
+      const file = await window.uploadChecklistPhoto(
+        blob,
+        `InstaCheckList_reference_${Date.now()}.jpg`,
+      );
+      reference = {
+        id: file.id,
+        url: file.webViewLink || "",
+        thumbData: await window.createChecklistThumbnail(blob),
+      };
+      updatePreview();
+    } catch (e) {
+      el("itemSettingsStatus").textContent = e.message;
+    }
+  }
+  el("serialSettingsBtn").onclick = () => showEditor("serial");
+  document.querySelectorAll('[name="itemAction"]').forEach(r=>r.addEventListener('change',()=>{el('itemValidationFields').hidden=r.value!=='input'}));
+  el("saveItemSettingsBtn").onclick = save;
+  el("selectReferenceImageBtn").onclick = pick;
+  el("captureReferenceImageBtn").onclick = startCamera;
+  el("referenceShutterBtn").onclick = capture;
+  el("clearReferenceImageBtn").onclick = () => {
+    reference = {};
+    updatePreview();
+  };
+  el("saveProjectNameBtn").onclick = saveProjectName;
+  window.getChecklistItemAction=id=>rule(id).action||'';
 })();

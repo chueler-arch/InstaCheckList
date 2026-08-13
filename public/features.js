@@ -42,6 +42,7 @@
     }),
   );
   byId("filterBtn").addEventListener("click", () => openModal("filterModal"));
+  byId("layoutModal").classList.add("layout-panel-modal");
   byId("settingsBtn").addEventListener("click", () =>
     openModal("settingsModal"),
   );
