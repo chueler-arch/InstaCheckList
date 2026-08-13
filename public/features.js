@@ -56,6 +56,15 @@
     byId("projectNameInput").value = window.checklistProjectName || "";
     openModal("projectNameModal");
   });
+  const settingsGrid=byId("settingsModal").querySelector(".settings-grid");
+  const settingsGroups=[
+    ["案件",["settingsProjectBtn","settingsViewerBtn","settingsShareBtn"]],
+    ["アプリ設定",["settingsLayoutBtn","settingsResetBtn"]],
+    ["接続先",["settingsFileBtn","settingsFolderBtn","settingsSheetBtn"]],
+  ];
+  const settingsButtons=new Map(settingsGroups.flatMap(([,ids])=>ids).map(id=>[id,byId(id)]));
+  settingsGrid.innerHTML="";
+  settingsGroups.forEach(([title,ids])=>{const section=document.createElement("section");section.className="settings-section";section.innerHTML=`<h3>${title}</h3><div class="settings-section-grid"></div>`;ids.forEach(id=>section.lastElementChild.append(settingsButtons.get(id)));settingsGrid.append(section)});
   byId("settingsLayoutBtn").addEventListener("click", () => {
     closeModal("settingsModal");
     openModal("layoutModal");
@@ -278,21 +287,8 @@
     const total = state.items.length,
       pending = state.items.filter((item) => !state.logs.has(item.id)),
       done = total - pending.length,
-      summary = byId("completionSummary"),
-      basePages =
-        prefs.mode === "group"
-          ? [
-              ...new Set(
-                state.items
-                  .filter(passes)
-                  .map((i) => i.major || "チェック項目"),
-              ),
-            ].length
-          : prefs.mode === "single"
-            ? state.items.filter(passes).length
-            : 0;
-    summary.hidden =
-      !total || (prefs.mode !== "all" && prefs.page !== basePages);
+      summary = byId("completionSummary");
+    summary.hidden = !total || (prefs.mode !== "all" && !document.getElementById("pageLabel").textContent.includes("終了"));
     byId("completionMessage").textContent = pending.length
       ? `全${total}工程中、${done}工程完了`
       : `全${total}工程を完了`;
@@ -423,6 +419,7 @@
             button.dataset.quickWork === prefs.work,
           ),
         );
+      renderCompletion();
     } finally {
       applying = false;
     }
