@@ -1,93 +1,1056 @@
 (() => {
-  'use strict';
-  const PHOTO_SHEET='_InstaCheckList_Photos';
-  const saved=JSON.parse(localStorage.getItem('instachecklist-layout')||'null')||{};
-  const prefs={mode:saved.mode||'all',side:saved.side||'right',size:saved.size||'medium',textSize:saved.textSize||'medium',referenceSize:Number(saved.referenceSize)||112,work:'all',worker:'all',page:0};
-  const photos=new Map();
-  const previews=new Map();
-  let photoItemId='',photoStream=null,frozenPhotoUrl='',lastPhotoKey='',applying=false;
-  const byId=id=>document.getElementById(id);
-  const modal=id=>byId(id);
-  function openModal(id){modal(id).classList.add('is-open');modal(id).setAttribute('aria-hidden','false')}
-  function closeModal(id){modal(id).classList.remove('is-open');modal(id).setAttribute('aria-hidden','true');if(id==='photoModal')stopPhotoCamera()}
-  document.querySelectorAll('[data-close-feature]').forEach(b=>b.addEventListener('click',()=>closeModal(b.dataset.closeFeature)));
-  document.querySelectorAll('.feature-modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModal(m.id)}));
-  byId('filterBtn').addEventListener('click',()=>openModal('filterModal'));
-  byId('settingsBtn').addEventListener('click',()=>openModal('settingsModal'));
-  const projectButton=document.createElement('button');projectButton.id='settingsProjectBtn';projectButton.type='button';projectButton.innerHTML='<span class="material-symbols-rounded">badge</span><span><strong>案件名</strong><small>確認・変更する</small></span>';byId('settingsModal').querySelector('.settings-grid').prepend(projectButton);projectButton.addEventListener('click',()=>{closeModal('settingsModal');byId('projectNameInput').value=window.checklistProjectName||'';openModal('projectNameModal')});
-  byId('settingsLayoutBtn').addEventListener('click',()=>{closeModal('settingsModal');openModal('layoutModal')});
-  byId('settingsShareBtn').addEventListener('click',()=>{closeModal('settingsModal');showShareUrl()});
-  byId('settingsSheetBtn').addEventListener('click',()=>{if(state.spreadsheetId)open(`https://docs.google.com/spreadsheets/d/${encodeURIComponent(state.spreadsheetId)}/edit`,'_blank','noopener')});
-  byId('settingsViewerBtn').addEventListener('click',()=>{closeModal('settingsModal');openSheetViewer()});
-  byId('settingsFileBtn').addEventListener('click',()=>{closeModal('settingsModal');openModal('storageFlowModal');if(state.folderId){showStorageStep('file');chooseSheet()}else showStorageStep('folder')});
-  byId('settingsFolderBtn').addEventListener('click',()=>{closeModal('settingsModal');state.folderSelectionOnly=true;chooseFolder()});
-  byId('settingsResetBtn').addEventListener('click',()=>{closeModal('settingsModal');resetToStart()});
-  window.showStorageStep=step=>{byId('storageFolderStep').hidden=step!=='folder';byId('storageFileStep').hidden=step!=='file';byId('storageFlowTitle').textContent=step==='folder'?'保存先を設定':'チェックシートを選択'};
-  async function connectAccount(forceAccount=false){const button=forceAccount?byId('switchAccountBtn'):byId('driveStartBtn');button.disabled=true;setupStatus('Googleアカウントへ接続しています…');try{await waitForGoogle();await authorize(forceAccount);await loadUser();const id=requestedSheet()||localStorage.getItem('instachecklist-sheet-id');if(id&&state.folderId){await loadDirectSheet(id);return}setupStatus('Googleアカウントへ接続しました');showStorageStep('folder');openModal('storageFlowModal')}catch(e){setupStatus(e.message||'Googleアカウントへ接続できませんでした。',true)}finally{button.disabled=false}}
-  byId('driveStartBtn').addEventListener('click',()=>connectAccount(false));
-  byId('switchAccountBtn').addEventListener('click',()=>connectAccount(true));
-  byId('changeStorageFolderBtn').addEventListener('click',()=>showStorageStep('folder'));
-  byId('copyShareUrlBtn').addEventListener('click',async()=>{await navigator.clipboard.writeText(byId('shareUrlInput').value);toast('共有URLをコピーしました')});
-  function saveLayout(){localStorage.setItem('instachecklist-layout',JSON.stringify({mode:prefs.mode,side:prefs.side,size:prefs.size,textSize:prefs.textSize,referenceSize:prefs.referenceSize}))}
-  document.querySelectorAll('[name="layoutMode"]').forEach(r=>{r.checked=r.value===prefs.mode;r.addEventListener('change',()=>{prefs.mode=r.value;prefs.page=0;saveLayout();applyFeatures()})});
-  document.querySelectorAll('[name="checkSide"]').forEach(r=>{r.checked=r.value===prefs.side;r.addEventListener('change',()=>{prefs.side=r.value;saveLayout();applyFeatures()})});
-  document.querySelectorAll('[name="checkSize"]').forEach(r=>{r.checked=r.value===prefs.size;r.addEventListener('change',()=>{prefs.size=r.value;saveLayout();applyFeatures()})});
-  document.querySelectorAll('[name="textSize"]').forEach(r=>{r.checked=r.value===prefs.textSize;r.addEventListener('change',()=>{prefs.textSize=r.value;saveLayout();applyFeatures()})});const referenceRange=byId('referenceSizeRange');referenceRange.value=prefs.referenceSize;byId('referenceSizeOutput').textContent=`${prefs.referenceSize}px`;referenceRange.addEventListener('input',()=>{prefs.referenceSize=Number(referenceRange.value);byId('referenceSizeOutput').textContent=`${prefs.referenceSize}px`;saveLayout();applyFeatures()});
-  function applyExtendedLayout(){const list=byId('checklist');list.classList.remove('text-small','text-medium','text-large');list.classList.add(`text-${prefs.textSize}`);document.documentElement.style.setProperty('--reference-size',`${prefs.referenceSize}px`)}document.querySelectorAll('[name="textSize"]').forEach(r=>r.addEventListener('change',applyExtendedLayout));referenceRange.addEventListener('input',applyExtendedLayout);applyExtendedLayout();
-  document.querySelectorAll('[name="workFilter"]').forEach(r=>{r.checked=r.value===prefs.work;r.addEventListener('change',()=>{prefs.work=r.value;prefs.page=0;applyFeatures()})});
-  document.querySelectorAll('[data-quick-work]').forEach(button=>button.addEventListener('click',()=>{prefs.work=button.dataset.quickWork;prefs.page=0;const radio=document.querySelector(`[name="workFilter"][value="${prefs.work}"]`);if(radio)radio.checked=true;applyFeatures()}));
-  document.querySelectorAll('[name="workerFilter"]').forEach(r=>{r.checked=r.value===prefs.worker;r.addEventListener('change',()=>{prefs.worker=r.value;prefs.page=0;applyFeatures()})});
-  byId('clearFilterBtn').addEventListener('click',()=>{prefs.work='all';prefs.worker='all';prefs.page=0;document.querySelector('[name="workFilter"][value="all"]').checked=true;document.querySelector('[name="workerFilter"][value="all"]').checked=true;applyFeatures();closeModal('filterModal')});
-  byId('prevPageBtn').addEventListener('click',()=>{prefs.page=Math.max(0,prefs.page-1);applyFeatures();applyExtendedLayout();scrollTo({top:byId('workspace').offsetTop-70,behavior:'smooth'})});
-  byId('nextPageBtn').addEventListener('click',()=>{prefs.page++;applyFeatures();applyExtendedLayout();scrollTo({top:byId('workspace').offsetTop-70,behavior:'smooth'})});
-  function goToItem(id){const item=state.items.find(i=>i.id===id);if(!item)return;prefs.work='all';prefs.worker='all';document.querySelector('[name="workFilter"][value="all"]').checked=true;document.querySelector('[name="workerFilter"][value="all"]').checked=true;if(prefs.mode==='single')prefs.page=state.items.findIndex(i=>i.id===id);else if(prefs.mode==='group')prefs.page=[...new Set(state.items.map(i=>i.major||'チェック項目'))].indexOf(item.major||'チェック項目');applyFeatures();requestAnimationFrame(()=>document.querySelector(`.item[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({behavior:'smooth',block:'center'}))}
-  function renderCompletion(){const total=state.items.length,pending=state.items.filter(item=>!state.logs.has(item.id)),done=total-pending.length,summary=byId('completionSummary');summary.hidden=!total;byId('completionMessage').textContent=pending.length?`全${total}工程中、${done}工程完了`:`全${total}工程を完了`;const list=byId('unfinishedItems');list.innerHTML=pending.length?`<p>未処理の工程</p>${pending.map(item=>`<button type="button" data-item-id="${esc(item.id)}">${esc(item.small||item.middle||'名称未設定')}</button>`).join('')}`:'';list.querySelectorAll('button').forEach(button=>button.addEventListener('click',()=>goToItem(button.dataset.itemId)))}
-  function passes(item){const log=state.logs.get(item.id),done=Boolean(log);if(prefs.work==='done'&&!done)return false;if(prefs.work==='undone'&&done)return false;if(prefs.worker==='mine'&&(!done||log.user!==state.userName))return false;if(prefs.worker==='others'&&(!done||log.user===state.userName))return false;return true}
-  function injectItemTools(article,item){if(article.dataset.featuresReady)return;article.dataset.featuresReady='true';const row=document.createElement('div');row.className='item-photo-row';const strip=document.createElement('div');strip.className='item-photos';const button=document.createElement('button');button.className='item-camera';button.type='button';button.setAttribute('aria-label','作業写真を撮影');button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 6 10 4h4l1.5 2H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.5Z"/><circle cx="12" cy="12.5" r="3.5"/></svg>';button.addEventListener('click',()=>openPhoto(item.id));row.append(strip,button);article.append(row)}
-  function previewKey(itemId,photo,index){return photo.id||`${itemId}:${index}`}
-  function renderItemPhotos(article,id){const strip=article.querySelector('.item-photos');if(!strip)return;const list=photos.get(id)||[];strip.innerHTML=list.map((p,i)=>{const src=previews.get(previewKey(id,p,i))||p.thumbData;return`<div class="item-photo">${src?`<button class="photo-preview-button" type="button" data-src="${src}"><img src="${src}" alt="作業写真" loading="lazy"></button>`:'<span class="photo-loading">読込中</span>'}<a href="${p.url}" target="_blank" rel="noopener">Driveで開く</a></div>`}).join('');strip.querySelectorAll('.photo-preview-button').forEach(button=>button.addEventListener('click',()=>showImagePreview(button.dataset.src)))}
-  function applyFeatures(){if(applying)return;applying=true;try{const list=byId('checklist');list.classList.toggle('check-right',prefs.side==='right');list.classList.remove('check-small','check-medium','check-large');list.classList.add(`check-${prefs.size}`);const eligible=state.items.filter(passes);let pages=[];if(prefs.mode==='group')pages=[...new Set(eligible.map(i=>i.major||'チェック項目'))];else if(prefs.mode==='single')pages=eligible.map(i=>i.id);prefs.page=Math.max(0,Math.min(prefs.page,Math.max(0,pages.length-1)));const visible=new Set(eligible.filter(i=>prefs.mode==='all'||(prefs.mode==='group'?(i.major||'チェック項目')===pages[prefs.page]:i.id===pages[prefs.page])).map(i=>i.id));list.querySelectorAll('.item').forEach(article=>{const item=state.items.find(i=>i.id===article.dataset.id);if(!item)return;injectItemTools(article,item);article.classList.toggle('is-feature-hidden',!visible.has(item.id));renderItemPhotos(article,item.id)});list.querySelectorAll('.group-title').forEach(h=>h.classList.add('is-feature-hidden'));const shownMajors=new Set(state.items.filter(i=>visible.has(i.id)).map(i=>i.major||'チェック項目'));list.querySelectorAll('.group-title').forEach(h=>{if(shownMajors.has(h.textContent.trim()))h.classList.remove('is-feature-hidden')});const nav=byId('pageNav');nav.hidden=prefs.mode==='all'||pages.length<1;if(!nav.hidden){byId('pageLabel').textContent=prefs.mode==='group'?`${prefs.page+1} / ${pages.length}　${pages[prefs.page]}`:`${prefs.page+1} / ${pages.length}`;byId('prevPageBtn').disabled=prefs.page===0;byId('nextPageBtn').disabled=prefs.page>=pages.length-1}const active=prefs.work!=='all'||prefs.worker!=='all';byId('filterBtn').classList.toggle('filter-active',active);document.querySelectorAll('[data-quick-work]').forEach(button=>button.classList.toggle('active',button.dataset.quickWork===prefs.work))}finally{applying=false}}
-  const observer=new MutationObserver(()=>{applyFeatures();renderCompletion();updateSheetLink();loadPhotosIfNeeded();if(byId('setup').hidden)closeModal('storageFlowModal')});
-  observer.observe(byId('checklist'),{childList:true});observer.observe(byId('setup'),{attributes:true,attributeFilter:['hidden']});
-  function currentSpreadsheetId(){return state.spreadsheetId||localStorage.getItem('instachecklist-sheet-id')||''}
-  function updateSheetLink(){const ready=Boolean(currentSpreadsheetId());byId('settingsSheetBtn').disabled=!ready;byId('settingsShareBtn').disabled=false;byId('settingsViewerBtn').disabled=false}
-  function resetToStart(){if(state.token&&window.google?.accounts?.oauth2)google.accounts.oauth2.revoke(state.token,()=>{});stopCamera();stopPhotoCamera();['instachecklist-google-authorized-v2','instachecklist-sheet-id','instachecklist-folder-id','instachecklist-folder-name'].forEach(key=>localStorage.removeItem(key));history.replaceState({},'',location.pathname);state.token='';state.expires=0;state.spreadsheetId='';state.folderId='';state.folderName='';state.serial='';state.items=[];state.logs.clear();dom.workspace.hidden=true;dom.scanner.hidden=true;dom.setup.hidden=false;dom.serialInput.value='';dom.checklist.innerHTML='';document.querySelectorAll('.feature-modal.is-open').forEach(m=>closeModal(m.id));updateFolderUi();updateSheetLink();setupStatus('未接続');toast('スタート画面に戻りました')}
-  let viewerSheets=[],viewerIndex=0;
-  function qrDataUrl(serial){const url=new URL(location.origin+location.pathname);url.searchParams.set('sheet',state.spreadsheetId);url.searchParams.set('sheetName',state.sheetTitle);url.searchParams.set('serial',serial);if(state.folderId)url.searchParams.set('folder',state.folderId);const matrix=new ZXing.QRCodeWriter().encode(url.toString(),ZXing.BarcodeFormat.QR_CODE,180,180,new Map()),canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');canvas.width=canvas.height=180;ctx.fillStyle='#fff';ctx.fillRect(0,0,180,180);ctx.fillStyle='#000';for(let y=0;y<180;y++)for(let x=0;x<180;x++)if(matrix.get(x,y))ctx.fillRect(x,y,1,1);return canvas.toDataURL('image/png')}
-  function reportRows(logs,items=state.items){return items.map((item,index)=>{const log=logs.get(item.id),major=item.major||'チェック項目',starts=index===0||(items[index-1].major||'チェック項目')!==major;let span=1;if(starts)while(index+span<items.length&&(items[index+span].major||'チェック項目')===major)span++;const majorCell=starts?`<td rowspan="${span}">${esc(major)}</td>`:'';return`<tr>${majorCell}<td><strong>${esc(item.small||item.middle||'名称未設定')}</strong>${item.middle&&item.small?`<small>${esc(item.middle)}</small>`:''}${item.instruction?`<small>${esc(item.instruction)}</small>`:''}${log?.memo?`<small>メモ：${esc(log.memo)}</small>`:''}</td><td class="judge">${log?'✓':''}</td><td>${log?`${esc(log.user)}<small>${esc(log.date)}</small>`:''}</td></tr>`}).join('')}
-  function reportWorkDate(logs){const dates=[...logs.values()].map(log=>String(log.date||'').match(/\d{4}\/\d{2}\/\d{2}/)?.[0]).filter(Boolean).sort();if(!dates.length)return'未完了';const f=value=>{const[y,m,d]=value.split('/');return`${y}年${Number(m)}月${Number(d)}日`};return dates[0]===dates.at(-1)?f(dates[0]):`${f(dates[0])}～${f(dates.at(-1))}`}
-  function reportHtml(serial,logs,options={}){const items=options.items||state.items,page=options.page||1,total=options.total||1,title=window.checklistProjectName||'';return`<article class="report-sheet"><header class="report-header"><div class="report-print-date">印刷日時：${esc(localDate())}</div><h1>${title?`${esc(title)}<small>チェックシート</small>`:'チェックシート'}</h1><span class="report-page">${page} / ${total}</span><img class="report-qr" src="${qrDataUrl(serial)}" alt="この機器を開くQRコード"><table class="report-meta"><thead><tr><th>シリアル番号</th><th>作業日</th></tr></thead><tbody><tr><td>${esc(serial)}</td><td>${esc(reportWorkDate(logs))}</td></tr></tbody></table></header><table class="report-body"><thead><tr><th class="major-col">大項目</th><th>作業項目・指示内容</th><th class="judge-col">判定</th><th class="operator-col">確認者</th></tr></thead><tbody>${reportRows(logs,items)}</tbody></table><footer class="report-footer">シリアル番号：${esc(serial)}　ページ：${page} / ${total}<br>このチェックシートはInstaCheckListで作成されています。</footer></article>`}
-  async function openSheetViewer(){openModal('sheetViewerModal');const spreadsheetId=currentSpreadsheetId();if(!spreadsheetId){byId('viewerStatus').textContent='先に作業用Spreadsheetを選択してください。';viewerSheets=[];renderViewer();return}state.spreadsheetId=spreadsheetId;byId('viewerStatus').textContent='チェック記録を読み込んでいます…';try{await loadItems();const data=await valuesGet(`${LOG_SHEET}!A:H`),serials=new Map();(data.values||[]).slice(1).forEach(r=>{const serial=String(r[0]||'');if(!serial)return;if(!serials.has(serial))serials.set(serial,new Map());serials.get(serial).set(String(r[1]),{date:r[2]||'',user:r[3]||'',memo:r[5]||''})});viewerSheets=[...serials].map(([serial,logs])=>({serial,logs}));if(state.serial&&!serials.has(state.serial))viewerSheets.unshift({serial:state.serial,logs:new Map()});viewerIndex=Math.max(0,viewerSheets.findIndex(s=>s.serial===state.serial));renderViewer();byId('viewerStatus').textContent=viewerSheets.length?'':'チェック記録がありません。'}catch(e){byId('viewerStatus').textContent=e.message||'チェックシートを読み込めませんでした。'}}
-  function renderViewer(){const slider=byId('sheetSlider');slider.innerHTML=viewerSheets.map(s=>`<div class="sheet-slide">${reportHtml(s.serial,s.logs)}</div>`).join('');slider.style.transform=`translateX(-${viewerIndex*100}%)`;byId('viewerCounter').textContent=viewerSheets.length?`${viewerIndex+1} / ${viewerSheets.length}`:'0 / 0';byId('viewerPrevBtn').disabled=viewerIndex<=0;byId('viewerNextBtn').disabled=viewerIndex>=viewerSheets.length-1;byId('printMenuBtn').disabled=!viewerSheets.length}
-  byId('viewerPrevBtn').addEventListener('click',()=>{viewerIndex=Math.max(0,viewerIndex-1);renderViewer()});
-  byId('viewerNextBtn').addEventListener('click',()=>{viewerIndex=Math.min(viewerSheets.length-1,viewerIndex+1);renderViewer()});
-  function paginateReportItems(logs){const pages=[];let page=[],weight=0;state.items.forEach(item=>{const log=logs.get(item.id),text=[item.middle,item.small,item.instruction,log?.memo].join(''),rowWeight=1+Math.floor(text.length/75);if(page.length&&weight+rowWeight>30){pages.push(page);page=[];weight=0}page.push(item);weight+=rowWeight});if(page.length||!pages.length)pages.push(page);return pages}
-  function printReports(list){const popup=open('','_blank');if(!popup)return toast('PDF画面を開くため、ポップアップを許可してください。');const reports=list.flatMap(sheet=>{const pages=paginateReportItems(sheet.logs),total=pages.length;return pages.map((items,index)=>reportHtml(sheet.serial,sheet.logs,{items,page:index+1,total}))});popup.document.write(`<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>チェックシート</title><link rel="stylesheet" href="${location.origin}${location.pathname.replace(/[^/]*$/,'')}report.css"></head><body>${reports.join('')}<script>onload=()=>setTimeout(()=>print(),300)<\/script></body></html>`);popup.document.close()}
-  const printSelect=byId('printActionSelect');byId('printMenuBtn').addEventListener('click',()=>{printSelect.hidden=!printSelect.hidden;byId('printMenuBtn').setAttribute('aria-expanded',String(!printSelect.hidden));if(!printSelect.hidden)printSelect.focus()});printSelect.addEventListener('change',()=>{const action=printSelect.value;printSelect.hidden=true;printSelect.selectedIndex=-1;byId('printMenuBtn').setAttribute('aria-expanded','false');printReports(action==='current'&&viewerSheets[viewerIndex]?[viewerSheets[viewerIndex]]:viewerSheets)});
-  async function ensurePhotoSheet(){const meta=await api(sheetsUrl('?fields=sheets.properties'));if(!meta.sheets.some(s=>s.properties.title===PHOTO_SHEET))await batchUpdate([{addSheet:{properties:{title:PHOTO_SHEET,hidden:true}}}]);await valuesUpdate(`${PHOTO_SHEET}!A1:H1`,[['シリアル番号','項目ID','写真URL','サムネイルURL','DriveファイルID','撮影日時','ユーザー名','共有サムネイル']])}
-  function thumbnailData(blob){return new Promise((resolve,reject)=>{const url=URL.createObjectURL(blob),img=new Image();img.onload=()=>{try{const scale=Math.min(1,240/img.naturalWidth,180/img.naturalHeight),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',.62))}catch(e){reject(e)}finally{URL.revokeObjectURL(url)}};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('サムネイルを作成できませんでした。'))};img.src=url})}
-  async function loadDrivePreview(itemId,photo,index){if(!photo.id||photo.thumbData)return;const key=previewKey(itemId,photo,index);try{await authorize();const response=await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.id)}?alt=media&supportsAllDrives=true`,{headers:{Authorization:`Bearer ${state.token}`}});if(!response.ok)throw new Error(`Drive画像の取得に失敗しました (${response.status})`);const thumbData=await thumbnailData(await response.blob());photo.thumbData=thumbData;previews.set(key,thumbData);if(photo.row)await valuesUpdate(`${PHOTO_SHEET}!H${photo.row}`,[[thumbData]]);applyFeatures()}catch(e){console.warn('写真を取得できませんでした',e)}}
-  async function loadPhotosIfNeeded(){if(!state.spreadsheetId||!state.serial||byId('workspace').hidden)return;const key=`${state.spreadsheetId}:${state.serial}`;if(key===lastPhotoKey)return;lastPhotoKey=key;try{await ensurePhotoSheet();const data=await api(sheetsUrl(`/values/${encodeURIComponent(PHOTO_SHEET+'!A:H')}?majorDimension=ROWS`));photos.clear();for(const url of previews.values())if(String(url).startsWith('blob:'))URL.revokeObjectURL(url);previews.clear();(data.values||[]).slice(1).forEach((r,index)=>{if(String(r[0])!==state.serial)return;const entry={url:r[2]||'',thumb:r[3]||'',id:r[4]||'',date:r[5]||'',user:r[6]||'',thumbData:r[7]||'',row:index+2};if(!photos.has(String(r[1])))photos.set(String(r[1]),[]);photos.get(String(r[1])).push(entry)});applyFeatures();photos.forEach((list,itemId)=>list.forEach((photo,index)=>{if(photo.thumbData)previews.set(previewKey(itemId,photo,index),photo.thumbData);else loadDrivePreview(itemId,photo,index)}));applyFeatures()}catch(e){console.warn('写真履歴を読み込めませんでした',e);lastPhotoKey=''}}
-  async function openPhoto(id){photoItemId=id;byId('photoStatus').textContent='';clearFrozenPhoto();openModal('photoModal');try{photoStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});byId('photoVideo').srcObject=photoStream;await byId('photoVideo').play();byId('photoMessage').hidden=true}catch{byId('photoMessage').textContent='カメラを利用できません。ブラウザの許可を確認してください。'}}
-  function clearFrozenPhoto(){const video=byId('photoVideo');video.removeAttribute('poster');if(frozenPhotoUrl)URL.revokeObjectURL(frozenPhotoUrl);frozenPhotoUrl=''}
-  function freezePhoto(blob){const video=byId('photoVideo');photoStream?.getTracks().forEach(t=>t.stop());photoStream=null;video.pause();video.srcObject=null;clearFrozenPhoto();frozenPhotoUrl=URL.createObjectURL(blob);video.poster=frozenPhotoUrl;byId('photoMessage').hidden=true}
-  function stopPhotoCamera(){photoStream?.getTracks().forEach(t=>t.stop());photoStream=null;byId('photoVideo').srcObject=null;clearFrozenPhoto();byId('photoMessage').hidden=false}
-  function canvasBlob(){const video=byId('photoVideo'),canvas=byId('photoCanvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0);return new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('写真を作成できませんでした。')),'image/jpeg',.88))}
-  async function uploadPhoto(blob,filename){if(!state.folderId)throw new Error('保存先フォルダが選択されていません。');const boundary=`icl_${Date.now()}`;const metadata=JSON.stringify({name:filename,mimeType:'image/jpeg',parents:[state.folderId]});const body=new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: image/jpeg\r\n\r\n`,blob,`\r\n--${boundary}--`],{type:`multipart/related; boundary=${boundary}`});return api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink,thumbnailLink',{method:'POST',headers:{'Content-Type':`multipart/related; boundary=${boundary}`},body})}
-  window.uploadChecklistPhoto=uploadPhoto;
-  window.createChecklistThumbnail=thumbnailData;
-  function showImagePreview(src){if(!src)return;byId('imagePreviewLarge').src=src;openModal('imagePreviewModal')}window.showImagePreview=showImagePreview;
-  byId('photoShutterBtn').addEventListener('click',async()=>{const button=byId('photoShutterBtn');button.disabled=true;byId('photoStatus').textContent='Google Driveへ保存しています…';try{const blob=await canvasBlob();freezePhoto(blob);const thumbData=await thumbnailData(blob);await ensurePhotoSheet();const safe=state.serial.replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,50);const file=await uploadPhoto(blob,`InstaCheckList_${safe}_${Date.now()}.jpg`);const date=localDate();await api(sheetsUrl(`/values/${encodeURIComponent(PHOTO_SHEET+'!A:H')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[[state.serial,photoItemId,file.webViewLink||'',file.thumbnailLink||'',file.id,date,state.userName,thumbData]]})});if(!photos.has(photoItemId))photos.set(photoItemId,[]);const index=photos.get(photoItemId).length,entry={url:file.webViewLink||'',thumb:file.thumbnailLink||'',id:file.id,date,user:state.userName,thumbData};photos.get(photoItemId).push(entry);previews.set(previewKey(photoItemId,entry,index),thumbData);applyFeatures();byId('photoStatus').textContent='保存しました';setTimeout(()=>closeModal('photoModal'),500)}catch(e){byId('photoStatus').textContent=e.message||'写真を保存できませんでした。'}finally{button.disabled=false}});
-  function validDriveId(id){return /^[\w-]{10,}$/.test(id||'')}
-  function requestedSheet(){const id=new URLSearchParams(location.search).get('sheet')||'';return validDriveId(id)?id:''}
-  function requestedFolder(){const id=new URLSearchParams(location.search).get('folder')||'';return validDriveId(id)?id:''}
-  function requestedSerial(){return new URLSearchParams(location.search).get('serial')?.trim()||''}
-  async function waitForGoogle(){for(let i=0;i<40&&!window.google?.accounts?.oauth2;i++)await new Promise(r=>setTimeout(r,200));initGoogle()}
-  async function loadDirectSheet(id){setupStatus('Googleアカウントへ接続しています…');await waitForGoogle();await authorize();state.spreadsheetId=id;localStorage.setItem('instachecklist-sheet-id',id);await Promise.all([loadUser(),loadWorkbook()]);dom.setup.hidden=true;dom.scanner.hidden=false;setupStatus('接続済み');updateSheetLink();const serial=requestedSerial();if(serial){dom.serialInput.value=serial;await openDevice(serial)}else startCamera()}
-  function interceptSharedConnect(event){const id=requestedSheet();if(!id)return;event.preventDefault();event.stopImmediatePropagation();loadDirectSheet(id).catch(e=>setupStatus(e.message||'対象Spreadsheetへ接続できませんでした。',true))}
-  byId('selectSheetBtn').addEventListener('click',interceptSharedConnect,true);
-  function showShareUrl(){openModal('shareUrlModal');const spreadsheetId=currentSpreadsheetId(),input=byId('shareUrlInput'),canvas=byId('shareQrCanvas'),ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);if(!spreadsheetId){input.value='先に作業用Spreadsheetを選択してください。';return}try{state.spreadsheetId=spreadsheetId;const url=new URL(location.href);url.search='';url.hash='';url.searchParams.set('sheet',spreadsheetId);if(state.folderId)url.searchParams.set('folder',state.folderId);const value=url.toString();input.value=value;const matrix=new ZXing.QRCodeWriter().encode(value,ZXing.BarcodeFormat.QR_CODE,280,280,new Map());ctx.fillStyle='#fff';ctx.fillRect(0,0,280,280);ctx.fillStyle='#07111f';for(let y=0;y<matrix.getHeight();y++)for(let x=0;x<matrix.getWidth();x++)if(matrix.get(x,y))ctx.fillRect(x,y,1,1)}catch(e){input.value='QRコードを生成できませんでした。URLはSpreadsheet選択後に再度お試しください。';console.error('共有QRコードを生成できませんでした',e)}}
-  function prepareStart(){const shared=requestedSheet(),sharedFolder=requestedFolder();state.folderId=sharedFolder||localStorage.getItem('instachecklist-folder-id')||'';state.folderName=sharedFolder?'共有URLの保存先':localStorage.getItem('instachecklist-folder-name')||'';if(state.folderId){localStorage.setItem('instachecklist-folder-id',state.folderId);localStorage.setItem('instachecklist-folder-name',state.folderName)}updateFolderUi();if(shared)setupStatus('Googleアカウントに接続すると共有チェックシートを開きます。')}
-  addEventListener('load',()=>setTimeout(prepareStart,500));
+  "use strict";
+  const PHOTO_SHEET = "_InstaCheckList_Photos";
+  const saved =
+    JSON.parse(localStorage.getItem("instachecklist-layout") || "null") || {};
+  const prefs = {
+    mode: saved.mode || "all",
+    side: saved.side || "right",
+    size: saved.size || "medium",
+    textSize: saved.textSize || "medium",
+    referenceSize: Number(saved.referenceSize) || 112,
+    work: "all",
+    worker: "all",
+    page: 0,
+  };
+  const photos = new Map();
+  const previews = new Map();
+  let photoItemId = "",
+    photoStream = null,
+    frozenPhotoUrl = "",
+    lastPhotoKey = "",
+    applying = false;
+  const byId = (id) => document.getElementById(id);
+  const modal = (id) => byId(id);
+  function openModal(id) {
+    modal(id).classList.add("is-open");
+    modal(id).setAttribute("aria-hidden", "false");
+  }
+  function closeModal(id) {
+    modal(id).classList.remove("is-open");
+    modal(id).setAttribute("aria-hidden", "true");
+    if (id === "photoModal") stopPhotoCamera();
+  }
+  document
+    .querySelectorAll("[data-close-feature]")
+    .forEach((b) =>
+      b.addEventListener("click", () => closeModal(b.dataset.closeFeature)),
+    );
+  document.querySelectorAll(".feature-modal").forEach((m) =>
+    m.addEventListener("click", (e) => {
+      if (e.target === m) closeModal(m.id);
+    }),
+  );
+  byId("filterBtn").addEventListener("click", () => openModal("filterModal"));
+  byId("settingsBtn").addEventListener("click", () =>
+    openModal("settingsModal"),
+  );
+  const projectButton = document.createElement("button");
+  projectButton.id = "settingsProjectBtn";
+  projectButton.type = "button";
+  projectButton.innerHTML =
+    '<span class="material-symbols-rounded">badge</span><span><strong>案件名</strong><small>確認・変更する</small></span>';
+  byId("settingsModal").querySelector(".settings-grid").prepend(projectButton);
+  projectButton.addEventListener("click", () => {
+    closeModal("settingsModal");
+    byId("projectNameInput").value = window.checklistProjectName || "";
+    openModal("projectNameModal");
+  });
+  byId("settingsLayoutBtn").addEventListener("click", () => {
+    closeModal("settingsModal");
+    openModal("layoutModal");
+  });
+  byId("settingsShareBtn").addEventListener("click", () => {
+    closeModal("settingsModal");
+    showShareUrl();
+  });
+  byId("settingsSheetBtn").addEventListener("click", () => {
+    if (state.spreadsheetId)
+      open(
+        `https://docs.google.com/spreadsheets/d/${encodeURIComponent(state.spreadsheetId)}/edit`,
+        "_blank",
+        "noopener",
+      );
+  });
+  byId("settingsViewerBtn").addEventListener("click", () => {
+    closeModal("settingsModal");
+    openSheetViewer();
+  });
+  byId("settingsFileBtn").addEventListener("click", () => {
+    closeModal("settingsModal");
+    openModal("storageFlowModal");
+    if (state.folderId) {
+      showStorageStep("file");
+      chooseSheet();
+    } else showStorageStep("folder");
+  });
+  byId("settingsFolderBtn").addEventListener("click", () => {
+    closeModal("settingsModal");
+    state.folderSelectionOnly = true;
+    chooseFolder();
+  });
+  byId("settingsResetBtn").addEventListener("click", () => {
+    closeModal("settingsModal");
+    resetToStart();
+  });
+  window.showStorageStep = (step) => {
+    byId("storageFolderStep").hidden = step !== "folder";
+    byId("storageFileStep").hidden = step !== "file";
+    byId("storageFlowTitle").textContent =
+      step === "folder" ? "保存先を設定" : "チェックシートを選択";
+  };
+  async function connectAccount(forceAccount = false) {
+    const button = forceAccount
+      ? byId("switchAccountBtn")
+      : byId("driveStartBtn");
+    button.disabled = true;
+    setupStatus("Googleアカウントへ接続しています…");
+    try {
+      await waitForGoogle();
+      await authorize(forceAccount);
+      await loadUser();
+      const id =
+        requestedSheet() || localStorage.getItem("instachecklist-sheet-id");
+      if (id && state.folderId) {
+        await loadDirectSheet(id);
+        return;
+      }
+      setupStatus("Googleアカウントへ接続しました");
+      showStorageStep("folder");
+      openModal("storageFlowModal");
+    } catch (e) {
+      setupStatus(
+        e.message || "Googleアカウントへ接続できませんでした。",
+        true,
+      );
+    } finally {
+      button.disabled = false;
+    }
+  }
+  byId("driveStartBtn").addEventListener("click", () => connectAccount(false));
+  byId("switchAccountBtn").addEventListener("click", () =>
+    connectAccount(true),
+  );
+  byId("changeStorageFolderBtn").addEventListener("click", () =>
+    showStorageStep("folder"),
+  );
+  byId("copyShareUrlBtn").addEventListener("click", async () => {
+    await navigator.clipboard.writeText(byId("shareUrlInput").value);
+    toast("共有URLをコピーしました");
+  });
+  function saveLayout() {
+    localStorage.setItem(
+      "instachecklist-layout",
+      JSON.stringify({
+        mode: prefs.mode,
+        side: prefs.side,
+        size: prefs.size,
+        textSize: prefs.textSize,
+        referenceSize: prefs.referenceSize,
+      }),
+    );
+  }
+  document.querySelectorAll('[name="layoutMode"]').forEach((r) => {
+    r.checked = r.value === prefs.mode;
+    r.addEventListener("change", () => {
+      prefs.mode = r.value;
+      prefs.page = 0;
+      saveLayout();
+      applyFeatures();
+    });
+  });
+  document.querySelectorAll('[name="checkSide"]').forEach((r) => {
+    r.checked = r.value === prefs.side;
+    r.addEventListener("change", () => {
+      prefs.side = r.value;
+      saveLayout();
+      applyFeatures();
+    });
+  });
+  document.querySelectorAll('[name="checkSize"]').forEach((r) => {
+    r.checked = r.value === prefs.size;
+    r.addEventListener("change", () => {
+      prefs.size = r.value;
+      saveLayout();
+      applyFeatures();
+    });
+  });
+  document.querySelectorAll('[name="textSize"]').forEach((r) => {
+    r.checked = r.value === prefs.textSize;
+    r.addEventListener("change", () => {
+      prefs.textSize = r.value;
+      saveLayout();
+      applyFeatures();
+    });
+  });
+  const referenceRange = byId("referenceSizeRange");
+  referenceRange.value = prefs.referenceSize;
+  byId("referenceSizeOutput").textContent = `${prefs.referenceSize}px`;
+  referenceRange.addEventListener("input", () => {
+    prefs.referenceSize = Number(referenceRange.value);
+    byId("referenceSizeOutput").textContent = `${prefs.referenceSize}px`;
+    saveLayout();
+    applyFeatures();
+  });
+  function applyExtendedLayout() {
+    const list = byId("checklist");
+    list.classList.remove("text-small", "text-medium", "text-large");
+    list.classList.add(`text-${prefs.textSize}`);
+    document.documentElement.style.setProperty(
+      "--reference-size",
+      `${prefs.referenceSize}px`,
+    );
+  }
+  document
+    .querySelectorAll('[name="textSize"]')
+    .forEach((r) => r.addEventListener("change", applyExtendedLayout));
+  referenceRange.addEventListener("input", applyExtendedLayout);
+  applyExtendedLayout();
+  document.querySelectorAll('[name="workFilter"]').forEach((r) => {
+    r.checked = r.value === prefs.work;
+    r.addEventListener("change", () => {
+      prefs.work = r.value;
+      prefs.page = 0;
+      applyFeatures();
+    });
+  });
+  document.querySelectorAll("[data-quick-work]").forEach((button) =>
+    button.addEventListener("click", () => {
+      prefs.work = button.dataset.quickWork;
+      prefs.page = 0;
+      const radio = document.querySelector(
+        `[name="workFilter"][value="${prefs.work}"]`,
+      );
+      if (radio) radio.checked = true;
+      applyFeatures();
+    }),
+  );
+  document.querySelectorAll('[name="workerFilter"]').forEach((r) => {
+    r.checked = r.value === prefs.worker;
+    r.addEventListener("change", () => {
+      prefs.worker = r.value;
+      prefs.page = 0;
+      applyFeatures();
+    });
+  });
+  byId("clearFilterBtn").addEventListener("click", () => {
+    prefs.work = "all";
+    prefs.worker = "all";
+    prefs.page = 0;
+    document.querySelector('[name="workFilter"][value="all"]').checked = true;
+    document.querySelector('[name="workerFilter"][value="all"]').checked = true;
+    applyFeatures();
+    closeModal("filterModal");
+  });
+  byId("prevPageBtn").addEventListener("click", () => {
+    prefs.page = Math.max(0, prefs.page - 1);
+    applyFeatures();
+    applyExtendedLayout();
+    scrollTo({ top: byId("workspace").offsetTop - 70, behavior: "smooth" });
+  });
+  byId("nextPageBtn").addEventListener("click", () => {
+    prefs.page++;
+    applyFeatures();
+    applyExtendedLayout();
+    scrollTo({ top: byId("workspace").offsetTop - 70, behavior: "smooth" });
+  });
+  function goToItem(id) {
+    const item = state.items.find((i) => i.id === id);
+    if (!item) return;
+    prefs.work = "all";
+    prefs.worker = "all";
+    document.querySelector('[name="workFilter"][value="all"]').checked = true;
+    document.querySelector('[name="workerFilter"][value="all"]').checked = true;
+    if (prefs.mode === "single")
+      prefs.page = state.items.findIndex((i) => i.id === id);
+    else if (prefs.mode === "group")
+      prefs.page = [
+        ...new Set(state.items.map((i) => i.major || "チェック項目")),
+      ].indexOf(item.major || "チェック項目");
+    applyFeatures();
+    requestAnimationFrame(() =>
+      document
+        .querySelector(`.item[data-id="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+    );
+  }
+  function renderCompletion() {
+    const total = state.items.length,
+      pending = state.items.filter((item) => !state.logs.has(item.id)),
+      done = total - pending.length,
+      summary = byId("completionSummary"),
+      basePages =
+        prefs.mode === "group"
+          ? [
+              ...new Set(
+                state.items
+                  .filter(passes)
+                  .map((i) => i.major || "チェック項目"),
+              ),
+            ].length
+          : prefs.mode === "single"
+            ? state.items.filter(passes).length
+            : 0;
+    summary.hidden =
+      !total || (prefs.mode !== "all" && prefs.page !== basePages);
+    byId("completionMessage").textContent = pending.length
+      ? `全${total}工程中、${done}工程完了`
+      : `全${total}工程を完了`;
+    const list = byId("unfinishedItems");
+    list.innerHTML = pending.length
+      ? `<p>未処理の工程</p>${pending.map((item) => `<button type="button" data-item-id="${esc(item.id)}">${esc(item.small || item.middle || "名称未設定")}</button>`).join("")}`
+      : "";
+    list
+      .querySelectorAll("button")
+      .forEach((button) =>
+        button.addEventListener("click", () => goToItem(button.dataset.itemId)),
+      );
+  }
+  function passes(item) {
+    const log = state.logs.get(item.id),
+      done = Boolean(log);
+    if (prefs.work === "done" && !done) return false;
+    if (prefs.work === "undone" && done) return false;
+    if (prefs.worker === "mine" && (!done || log.user !== state.userName))
+      return false;
+    if (prefs.worker === "others" && (!done || log.user === state.userName))
+      return false;
+    return true;
+  }
+  function injectItemTools(article, item) {
+    if (article.dataset.featuresReady) return;
+    article.dataset.featuresReady = "true";
+    const row = document.createElement("div");
+    row.className = "item-photo-row";
+    const strip = document.createElement("div");
+    strip.className = "item-photos";
+    const button = document.createElement("button");
+    button.className = "item-camera";
+    button.type = "button";
+    button.setAttribute("aria-label", "作業写真を撮影");
+    button.innerHTML =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 6 10 4h4l1.5 2H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3.5Z"/><circle cx="12" cy="12.5" r="3.5"/></svg>';
+    button.addEventListener("click", () => openPhoto(item.id));
+    row.append(strip, button);
+    article.append(row);
+  }
+  function previewKey(itemId, photo, index) {
+    return photo.id || `${itemId}:${index}`;
+  }
+  function renderItemPhotos(article, id) {
+    const strip = article.querySelector(".item-photos");
+    if (!strip) return;
+    const list = photos.get(id) || [];
+    strip.innerHTML = list
+      .map((p, i) => {
+        const src = previews.get(previewKey(id, p, i)) || p.thumbData;
+        return `<div class="item-photo">${src ? `<button class="photo-preview-button" type="button" data-src="${src}"><img src="${src}" alt="作業写真" loading="lazy"></button>` : '<span class="photo-loading">読込中</span>'}<a href="${p.url}" target="_blank" rel="noopener">Driveで開く</a></div>`;
+      })
+      .join("");
+    strip
+      .querySelectorAll(".photo-preview-button")
+      .forEach((button) =>
+        button.addEventListener("click", () =>
+          showImagePreview(button.dataset.src),
+        ),
+      );
+  }
+  function applyFeatures() {
+    if (applying) return;
+    applying = true;
+    try {
+      const list = byId("checklist");
+      list.classList.toggle("check-right", prefs.side === "right");
+      list.classList.remove("check-small", "check-medium", "check-large");
+      list.classList.add(`check-${prefs.size}`);
+      const eligible = state.items.filter(passes);
+      let pages = [];
+    if (prefs.mode === "group")
+      pages = [...new Set(eligible.map((i) => i.major || "チェック項目"))];
+    else if (prefs.mode === "single") pages = eligible.map((i) => i.id);
+    if (prefs.mode !== "all") pages.push("__completion__");
+      prefs.page = Math.max(
+        0,
+        Math.min(prefs.page, Math.max(0, pages.length - 1)),
+      );
+      const visible = new Set(
+        eligible
+          .filter(
+            (i) =>
+              prefs.mode === "all" ||
+              (prefs.mode === "group"
+                ? (i.major || "チェック項目") === pages[prefs.page]
+                : i.id === pages[prefs.page]),
+          )
+          .map((i) => i.id),
+      );
+      list.querySelectorAll(".item").forEach((article) => {
+        const item = state.items.find((i) => i.id === article.dataset.id);
+        if (!item) return;
+        injectItemTools(article, item);
+        article.classList.toggle("is-feature-hidden", !visible.has(item.id));
+        renderItemPhotos(article, item.id);
+      });
+      list
+        .querySelectorAll(".group-title")
+        .forEach((h) => h.classList.add("is-feature-hidden"));
+      const shownMajors = new Set(
+        state.items
+          .filter((i) => visible.has(i.id))
+          .map((i) => i.major || "チェック項目"),
+      );
+      list.querySelectorAll(".group-title").forEach((h) => {
+        if (shownMajors.has(h.textContent.trim()))
+          h.classList.remove("is-feature-hidden");
+      });
+      const nav = byId("pageNav");
+      nav.hidden = prefs.mode === "all" || pages.length < 1;
+      if (!nav.hidden) {
+      const pageName=pages[prefs.page]==="__completion__"?"終了":pages[prefs.page];
+      byId("pageLabel").textContent = prefs.mode === "group"
+          ? `${prefs.page + 1} / ${pages.length}　${pageName}`
+          : `${prefs.page + 1} / ${pages.length}${pageName==="終了"?"　終了":""}`;
+        byId("prevPageBtn").disabled = prefs.page === 0;
+        byId("nextPageBtn").disabled = prefs.page >= pages.length - 1;
+      }
+      const active = prefs.work !== "all" || prefs.worker !== "all";
+      byId("filterBtn").classList.toggle("filter-active", active);
+      document
+        .querySelectorAll("[data-quick-work]")
+        .forEach((button) =>
+          button.classList.toggle(
+            "active",
+            button.dataset.quickWork === prefs.work,
+          ),
+        );
+    } finally {
+      applying = false;
+    }
+  }
+  const observer = new MutationObserver(() => {
+    applyFeatures();
+    renderCompletion();
+    updateSheetLink();
+    loadPhotosIfNeeded();
+    if (byId("setup").hidden) closeModal("storageFlowModal");
+  });
+  observer.observe(byId("checklist"), { childList: true });
+  observer.observe(byId("setup"), {
+    attributes: true,
+    attributeFilter: ["hidden"],
+  });
+  function currentSpreadsheetId() {
+    return (
+      state.spreadsheetId ||
+      localStorage.getItem("instachecklist-sheet-id") ||
+      ""
+    );
+  }
+  function updateSheetLink() {
+    const ready = Boolean(currentSpreadsheetId());
+    byId("settingsSheetBtn").disabled = !ready;
+    byId("settingsShareBtn").disabled = false;
+    byId("settingsViewerBtn").disabled = false;
+  }
+  function resetToStart() {
+    if (state.token && window.google?.accounts?.oauth2)
+      google.accounts.oauth2.revoke(state.token, () => {});
+    stopCamera();
+    stopPhotoCamera();
+    [
+      "instachecklist-google-authorized-v2",
+      "instachecklist-sheet-id",
+      "instachecklist-folder-id",
+      "instachecklist-folder-name",
+    ].forEach((key) => localStorage.removeItem(key));
+    history.replaceState({}, "", location.pathname);
+    state.token = "";
+    state.expires = 0;
+    state.spreadsheetId = "";
+    state.folderId = "";
+    state.folderName = "";
+    state.serial = "";
+    state.items = [];
+    state.logs.clear();
+    dom.workspace.hidden = true;
+    dom.scanner.hidden = true;
+    dom.setup.hidden = false;
+    dom.serialInput.value = "";
+    dom.checklist.innerHTML = "";
+    document
+      .querySelectorAll(".feature-modal.is-open")
+      .forEach((m) => closeModal(m.id));
+    updateFolderUi();
+    updateSheetLink();
+    setupStatus("未接続");
+    toast("スタート画面に戻りました");
+  }
+  let viewerSheets = [],
+    viewerIndex = 0;
+  function qrDataUrl(serial) {
+    const url = new URL(location.origin + location.pathname);
+    url.searchParams.set("sheet", state.spreadsheetId);
+    url.searchParams.set("sheetName", state.sheetTitle);
+    url.searchParams.set("serial", serial);
+    if (state.folderId) url.searchParams.set("folder", state.folderId);
+    const matrix = new ZXing.QRCodeWriter().encode(
+        url.toString(),
+        ZXing.BarcodeFormat.QR_CODE,
+        180,
+        180,
+        new Map(),
+      ),
+      canvas = document.createElement("canvas"),
+      ctx = canvas.getContext("2d");
+    canvas.width = canvas.height = 180;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, 180, 180);
+    ctx.fillStyle = "#000";
+    for (let y = 0; y < 180; y++)
+      for (let x = 0; x < 180; x++)
+        if (matrix.get(x, y)) ctx.fillRect(x, y, 1, 1);
+    return canvas.toDataURL("image/png");
+  }
+  function reportRows(logs, items = state.items) {
+    return items
+      .map((item, index) => {
+        const log = logs.get(item.id),
+          major = item.major || "チェック項目",
+          starts =
+            index === 0 || (items[index - 1].major || "チェック項目") !== major;
+        let span = 1;
+        if (starts)
+          while (
+            index + span < items.length &&
+            (items[index + span].major || "チェック項目") === major
+          )
+            span++;
+        const majorCell = starts
+          ? `<td rowspan="${span}">${esc(major)}</td>`
+          : "";
+        return `<tr>${majorCell}<td><strong>${esc(item.small || item.middle || "名称未設定")}</strong>${item.middle && item.small ? `<small>${esc(item.middle)}</small>` : ""}${item.instruction ? `<small>${esc(item.instruction)}</small>` : ""}${log?.memo ? `<small>メモ：${esc(log.memo)}</small>` : ""}</td><td class="judge">${log ? "✓" : ""}</td><td>${log ? `${esc(log.user)}<small>${esc(log.date)}</small>` : ""}</td></tr>`;
+      })
+      .join("");
+  }
+  function reportWorkDate(logs) {
+    const dates = [...logs.values()]
+      .map((log) => String(log.date || "").match(/\d{4}\/\d{2}\/\d{2}/)?.[0])
+      .filter(Boolean)
+      .sort();
+    if (!dates.length) return "未完了";
+    const f = (value) => {
+      const [y, m, d] = value.split("/");
+      return `${y}年${Number(m)}月${Number(d)}日`;
+    };
+    return dates[0] === dates.at(-1)
+      ? f(dates[0])
+      : `${f(dates[0])}～${f(dates.at(-1))}`;
+  }
+  function reportHtml(serial, logs, options = {}) {
+    const items = options.items || state.items,
+      page = options.page || 1,
+      total = options.total || 1,
+      title = window.checklistProjectName || "";
+    return `<article class="report-sheet"><header class="report-header"><div class="report-print-date">印刷日時：${esc(localDate())}</div><h1>${title ? `${esc(title)}<small>チェックシート</small>` : "チェックシート"}</h1><span class="report-page">${page} / ${total}</span><img class="report-qr" src="${qrDataUrl(serial)}" alt="この機器を開くQRコード"><table class="report-meta"><thead><tr><th>シリアル番号</th><th>作業日</th></tr></thead><tbody><tr><td>${esc(serial)}</td><td>${esc(reportWorkDate(logs))}</td></tr></tbody></table></header><table class="report-body"><thead><tr><th class="major-col">大項目</th><th>作業項目・指示内容</th><th class="judge-col">判定</th><th class="operator-col">確認者</th></tr></thead><tbody>${reportRows(logs, items)}</tbody></table><footer class="report-footer">シリアル番号：${esc(serial)}　ページ：${page} / ${total}<br>このチェックシートはInstaCheckListで作成されています。</footer></article>`;
+  }
+  async function openSheetViewer() {
+    openModal("sheetViewerModal");
+    const spreadsheetId = currentSpreadsheetId();
+    if (!spreadsheetId) {
+      byId("viewerStatus").textContent =
+        "先に作業用Spreadsheetを選択してください。";
+      viewerSheets = [];
+      renderViewer();
+      return;
+    }
+    state.spreadsheetId = spreadsheetId;
+    byId("viewerStatus").textContent = "チェック記録を読み込んでいます…";
+    try {
+      await loadItems();
+      const data = await valuesGet(`${LOG_SHEET}!A:H`),
+        serials = new Map();
+      (data.values || []).slice(1).forEach((r) => {
+        const serial = String(r[0] || "");
+        if (!serial) return;
+        if (!serials.has(serial)) serials.set(serial, new Map());
+        serials
+          .get(serial)
+          .set(String(r[1]), {
+            date: r[2] || "",
+            user: r[3] || "",
+            memo: r[5] || "",
+          });
+      });
+      viewerSheets = [...serials].map(([serial, logs]) => ({ serial, logs }));
+      if (state.serial && !serials.has(state.serial))
+        viewerSheets.unshift({ serial: state.serial, logs: new Map() });
+      viewerIndex = Math.max(
+        0,
+        viewerSheets.findIndex((s) => s.serial === state.serial),
+      );
+      renderViewer();
+      byId("viewerStatus").textContent = viewerSheets.length
+        ? ""
+        : "チェック記録がありません。";
+    } catch (e) {
+      byId("viewerStatus").textContent =
+        e.message || "チェックシートを読み込めませんでした。";
+    }
+  }
+  function renderViewer() {
+    const slider = byId("sheetSlider");
+    slider.innerHTML = viewerSheets
+      .map(
+        (s) => `<div class="sheet-slide">${reportHtml(s.serial, s.logs)}</div>`,
+      )
+      .join("");
+    slider.style.transform = `translateX(-${viewerIndex * 100}%)`;
+    byId("viewerCounter").textContent = viewerSheets.length
+      ? `${viewerIndex + 1} / ${viewerSheets.length}`
+      : "0 / 0";
+    byId("viewerPrevBtn").disabled = viewerIndex <= 0;
+    byId("viewerNextBtn").disabled = viewerIndex >= viewerSheets.length - 1;
+    byId("printMenuBtn").disabled = !viewerSheets.length;
+  }
+  byId("viewerPrevBtn").addEventListener("click", () => {
+    viewerIndex = Math.max(0, viewerIndex - 1);
+    renderViewer();
+  });
+  byId("viewerNextBtn").addEventListener("click", () => {
+    viewerIndex = Math.min(viewerSheets.length - 1, viewerIndex + 1);
+    renderViewer();
+  });
+  function paginateReportItems(logs) {
+    const pages = [];
+    let page = [],
+      weight = 0;
+    state.items.forEach((item) => {
+      const log = logs.get(item.id),
+        text = [item.middle, item.small, item.instruction, log?.memo].join(""),
+        rowWeight = 1 + Math.floor(text.length / 75);
+      if (page.length && weight + rowWeight > 30) {
+        pages.push(page);
+        page = [];
+        weight = 0;
+      }
+      page.push(item);
+      weight += rowWeight;
+    });
+    if (page.length || !pages.length) pages.push(page);
+    return pages;
+  }
+  function printReports(list) {
+    const popup = open("", "_blank");
+    if (!popup)
+      return toast("PDF画面を開くため、ポップアップを許可してください。");
+    const reports = list.flatMap((sheet) => {
+      const pages = paginateReportItems(sheet.logs),
+        total = pages.length;
+      return pages.map((items, index) =>
+        reportHtml(sheet.serial, sheet.logs, { items, page: index + 1, total }),
+      );
+    });
+    popup.document.write(
+      `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>チェックシート</title><link rel="stylesheet" href="${location.origin}${location.pathname.replace(/[^/]*$/, "")}report.css"></head><body>${reports.join("")}<script>onload=()=>setTimeout(()=>print(),300)<\/script></body></html>`,
+    );
+    popup.document.close();
+  }
+  const printSelect = byId("printActionSelect");
+  byId("printMenuBtn").addEventListener("click", () => {
+    printSelect.hidden = !printSelect.hidden;
+    byId("printMenuBtn").setAttribute(
+      "aria-expanded",
+      String(!printSelect.hidden),
+    );
+    if (!printSelect.hidden) printSelect.focus();
+  });
+  printSelect.addEventListener("change", () => {
+    const action = printSelect.value;
+    printSelect.hidden = true;
+    printSelect.selectedIndex = -1;
+    byId("printMenuBtn").setAttribute("aria-expanded", "false");
+    printReports(
+      action === "current" && viewerSheets[viewerIndex]
+        ? [viewerSheets[viewerIndex]]
+        : viewerSheets,
+    );
+  });
+  async function ensurePhotoSheet() {
+    const meta = await api(sheetsUrl("?fields=sheets.properties"));
+    if (!meta.sheets.some((s) => s.properties.title === PHOTO_SHEET))
+      await batchUpdate([
+        { addSheet: { properties: { title: PHOTO_SHEET, hidden: true } } },
+      ]);
+    await valuesUpdate(`${PHOTO_SHEET}!A1:H1`, [
+      [
+        "シリアル番号",
+        "項目ID",
+        "写真URL",
+        "サムネイルURL",
+        "DriveファイルID",
+        "撮影日時",
+        "ユーザー名",
+        "共有サムネイル",
+      ],
+    ]);
+  }
+  function thumbnailData(blob) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob),
+        img = new Image();
+      img.onload = () => {
+        try {
+          const scale = Math.min(
+              1,
+              240 / img.naturalWidth,
+              180 / img.naturalHeight,
+            ),
+            canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+          canvas
+            .getContext("2d")
+            .drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.62));
+        } catch (e) {
+          reject(e);
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("サムネイルを作成できませんでした。"));
+      };
+      img.src = url;
+    });
+  }
+  async function loadDrivePreview(itemId, photo, index) {
+    if (!photo.id || photo.thumbData) return;
+    const key = previewKey(itemId, photo, index);
+    try {
+      await authorize();
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.id)}?alt=media&supportsAllDrives=true`,
+        { headers: { Authorization: `Bearer ${state.token}` } },
+      );
+      if (!response.ok)
+        throw new Error(`Drive画像の取得に失敗しました (${response.status})`);
+      const thumbData = await thumbnailData(await response.blob());
+      photo.thumbData = thumbData;
+      previews.set(key, thumbData);
+      if (photo.row)
+        await valuesUpdate(`${PHOTO_SHEET}!H${photo.row}`, [[thumbData]]);
+      applyFeatures();
+    } catch (e) {
+      console.warn("写真を取得できませんでした", e);
+    }
+  }
+  async function loadPhotosIfNeeded() {
+    if (!state.spreadsheetId || !state.serial || byId("workspace").hidden)
+      return;
+    const key = `${state.spreadsheetId}:${state.serial}`;
+    if (key === lastPhotoKey) return;
+    lastPhotoKey = key;
+    try {
+      await ensurePhotoSheet();
+      const data = await api(
+        sheetsUrl(
+          `/values/${encodeURIComponent(PHOTO_SHEET + "!A:H")}?majorDimension=ROWS`,
+        ),
+      );
+      photos.clear();
+      for (const url of previews.values())
+        if (String(url).startsWith("blob:")) URL.revokeObjectURL(url);
+      previews.clear();
+      (data.values || []).slice(1).forEach((r, index) => {
+        if (String(r[0]) !== state.serial) return;
+        const entry = {
+          url: r[2] || "",
+          thumb: r[3] || "",
+          id: r[4] || "",
+          date: r[5] || "",
+          user: r[6] || "",
+          thumbData: r[7] || "",
+          row: index + 2,
+        };
+        if (!photos.has(String(r[1]))) photos.set(String(r[1]), []);
+        photos.get(String(r[1])).push(entry);
+      });
+      applyFeatures();
+      photos.forEach((list, itemId) =>
+        list.forEach((photo, index) => {
+          if (photo.thumbData)
+            previews.set(previewKey(itemId, photo, index), photo.thumbData);
+          else loadDrivePreview(itemId, photo, index);
+        }),
+      );
+      applyFeatures();
+    } catch (e) {
+      console.warn("写真履歴を読み込めませんでした", e);
+      lastPhotoKey = "";
+    }
+  }
+  async function openPhoto(id) {
+    photoItemId = id;
+    byId("photoStatus").textContent = "";
+    clearFrozenPhoto();
+    openModal("photoModal");
+    try {
+      photoStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      });
+      byId("photoVideo").srcObject = photoStream;
+      await byId("photoVideo").play();
+      byId("photoMessage").hidden = true;
+    } catch {
+      byId("photoMessage").textContent =
+        "カメラを利用できません。ブラウザの許可を確認してください。";
+    }
+  }
+  function clearFrozenPhoto() {
+    const video = byId("photoVideo");
+    video.removeAttribute("poster");
+    if (frozenPhotoUrl) URL.revokeObjectURL(frozenPhotoUrl);
+    frozenPhotoUrl = "";
+  }
+  function freezePhoto(blob) {
+    const video = byId("photoVideo");
+    photoStream?.getTracks().forEach((t) => t.stop());
+    photoStream = null;
+    video.pause();
+    video.srcObject = null;
+    clearFrozenPhoto();
+    frozenPhotoUrl = URL.createObjectURL(blob);
+    video.poster = frozenPhotoUrl;
+    byId("photoMessage").hidden = true;
+  }
+  function stopPhotoCamera() {
+    photoStream?.getTracks().forEach((t) => t.stop());
+    photoStream = null;
+    byId("photoVideo").srcObject = null;
+    clearFrozenPhoto();
+    byId("photoMessage").hidden = false;
+  }
+  function canvasBlob() {
+    const video = byId("photoVideo"),
+      canvas = byId("photoCanvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    return new Promise((resolve, reject) =>
+      canvas.toBlob(
+        (b) =>
+          b ? resolve(b) : reject(new Error("写真を作成できませんでした。")),
+        "image/jpeg",
+        0.88,
+      ),
+    );
+  }
+  async function uploadPhoto(blob, filename) {
+    if (!state.folderId)
+      throw new Error("保存先フォルダが選択されていません。");
+    const boundary = `icl_${Date.now()}`;
+    const metadata = JSON.stringify({
+      name: filename,
+      mimeType: "image/jpeg",
+      parents: [state.folderId],
+    });
+    const body = new Blob(
+      [
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: image/jpeg\r\n\r\n`,
+        blob,
+        `\r\n--${boundary}--`,
+      ],
+      { type: `multipart/related; boundary=${boundary}` },
+    );
+    return api(
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink,thumbnailLink",
+      {
+        method: "POST",
+        headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+        body,
+      },
+    );
+  }
+  window.uploadChecklistPhoto = uploadPhoto;
+  window.createChecklistThumbnail = thumbnailData;
+  function showImagePreview(src) {
+    if (!src) return;
+    byId("imagePreviewLarge").src = src;
+    openModal("imagePreviewModal");
+  }
+  window.showImagePreview = showImagePreview;
+  byId("photoShutterBtn").addEventListener("click", async () => {
+    const button = byId("photoShutterBtn");
+    button.disabled = true;
+    byId("photoStatus").textContent = "Google Driveへ保存しています…";
+    try {
+      const blob = await canvasBlob();
+      freezePhoto(blob);
+      const thumbData = await thumbnailData(blob);
+      await ensurePhotoSheet();
+      const safe = state.serial.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 50);
+      const file = await uploadPhoto(
+        blob,
+        `InstaCheckList_${safe}_${Date.now()}.jpg`,
+      );
+      const date = localDate();
+      await api(
+        sheetsUrl(
+          `/values/${encodeURIComponent(PHOTO_SHEET + "!A:H")}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+        ),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            values: [
+              [
+                state.serial,
+                photoItemId,
+                file.webViewLink || "",
+                file.thumbnailLink || "",
+                file.id,
+                date,
+                state.userName,
+                thumbData,
+              ],
+            ],
+          }),
+        },
+      );
+      if (!photos.has(photoItemId)) photos.set(photoItemId, []);
+      const index = photos.get(photoItemId).length,
+        entry = {
+          url: file.webViewLink || "",
+          thumb: file.thumbnailLink || "",
+          id: file.id,
+          date,
+          user: state.userName,
+          thumbData,
+        };
+      photos.get(photoItemId).push(entry);
+      previews.set(previewKey(photoItemId, entry, index), thumbData);
+      applyFeatures();
+      byId("photoStatus").textContent = "保存しました";
+      setTimeout(() => closeModal("photoModal"), 500);
+    } catch (e) {
+      byId("photoStatus").textContent =
+        e.message || "写真を保存できませんでした。";
+    } finally {
+      button.disabled = false;
+    }
+  });
+  function validDriveId(id) {
+    return /^[\w-]{10,}$/.test(id || "");
+  }
+  function requestedSheet() {
+    const id = new URLSearchParams(location.search).get("sheet") || "";
+    return validDriveId(id) ? id : "";
+  }
+  function requestedFolder() {
+    const id = new URLSearchParams(location.search).get("folder") || "";
+    return validDriveId(id) ? id : "";
+  }
+  function requestedSerial() {
+    return new URLSearchParams(location.search).get("serial")?.trim() || "";
+  }
+  async function waitForGoogle() {
+    for (let i = 0; i < 40 && !window.google?.accounts?.oauth2; i++)
+      await new Promise((r) => setTimeout(r, 200));
+    initGoogle();
+  }
+  async function loadDirectSheet(id) {
+    setupStatus("Googleアカウントへ接続しています…");
+    await waitForGoogle();
+    await authorize();
+    state.spreadsheetId = id;
+    localStorage.setItem("instachecklist-sheet-id", id);
+    await Promise.all([loadUser(), loadWorkbook()]);
+    dom.setup.hidden = true;
+    dom.scanner.hidden = false;
+    setupStatus("接続済み");
+    updateSheetLink();
+    const serial = requestedSerial();
+    if (serial) {
+      dom.serialInput.value = serial;
+      await openDevice(serial);
+    } else startCamera();
+  }
+  function interceptSharedConnect(event) {
+    const id = requestedSheet();
+    if (!id) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    loadDirectSheet(id).catch((e) =>
+      setupStatus(e.message || "対象Spreadsheetへ接続できませんでした。", true),
+    );
+  }
+  byId("selectSheetBtn").addEventListener(
+    "click",
+    interceptSharedConnect,
+    true,
+  );
+  function showShareUrl() {
+    openModal("shareUrlModal");
+    const spreadsheetId = currentSpreadsheetId(),
+      input = byId("shareUrlInput"),
+      canvas = byId("shareQrCanvas"),
+      ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!spreadsheetId) {
+      input.value = "先に作業用Spreadsheetを選択してください。";
+      return;
+    }
+    try {
+      state.spreadsheetId = spreadsheetId;
+      const url = new URL(location.href);
+      url.search = "";
+      url.hash = "";
+      url.searchParams.set("sheet", spreadsheetId);
+      if (state.folderId) url.searchParams.set("folder", state.folderId);
+      const value = url.toString();
+      input.value = value;
+      const matrix = new ZXing.QRCodeWriter().encode(
+        value,
+        ZXing.BarcodeFormat.QR_CODE,
+        280,
+        280,
+        new Map(),
+      );
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, 280, 280);
+      ctx.fillStyle = "#07111f";
+      for (let y = 0; y < matrix.getHeight(); y++)
+        for (let x = 0; x < matrix.getWidth(); x++)
+          if (matrix.get(x, y)) ctx.fillRect(x, y, 1, 1);
+    } catch (e) {
+      input.value =
+        "QRコードを生成できませんでした。URLはSpreadsheet選択後に再度お試しください。";
+      console.error("共有QRコードを生成できませんでした", e);
+    }
+  }
+  function prepareStart() {
+    const shared = requestedSheet(),
+      sharedFolder = requestedFolder();
+    state.folderId =
+      sharedFolder || localStorage.getItem("instachecklist-folder-id") || "";
+    state.folderName = sharedFolder
+      ? "共有URLの保存先"
+      : localStorage.getItem("instachecklist-folder-name") || "";
+    if (state.folderId) {
+      localStorage.setItem("instachecklist-folder-id", state.folderId);
+      localStorage.setItem("instachecklist-folder-name", state.folderName);
+    }
+    updateFolderUi();
+    if (shared)
+      setupStatus("Googleアカウントに接続すると共有チェックシートを開きます。");
+  }
+  addEventListener("load", () => setTimeout(prepareStart, 500));
   applyFeatures();
 })();
