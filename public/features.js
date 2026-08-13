@@ -1,6 +1,8 @@
 (() => {
   "use strict";
   const PHOTO_SHEET = window.InstaCheckListCore.SHEETS.photos;
+  const photoModel = window.InstaCheckListPhotos,
+    reportModel = window.InstaCheckListReports;
   const saved =
     JSON.parse(localStorage.getItem("instachecklist-layout") || "null") || {};
   const prefs = {
@@ -332,7 +334,7 @@
     article.append(row);
   }
   function previewKey(itemId, photo, index) {
-    return photo.id || `${itemId}:${index}`;
+    return photoModel.previewKey(itemId, photo, index);
   }
   function renderItemPhotos(article, id) {
     const strip = article.querySelector(".item-photos");
@@ -511,39 +513,17 @@
     return canvas.toDataURL("image/png");
   }
   function reportRows(logs, items = state.items) {
-    return items
-      .map((item, index) => {
-        const log = logs.get(item.id),
-          major = item.major || "チェック項目",
-          starts =
-            index === 0 || (items[index - 1].major || "チェック項目") !== major;
-        let span = 1;
-        if (starts)
-          while (
-            index + span < items.length &&
-            (items[index + span].major || "チェック項目") === major
-          )
-            span++;
-        const majorCell = starts
-          ? `<td rowspan="${span}">${esc(major)}</td>`
+    return reportModel.rows(items, logs)
+      .map(({ item, log, major, startsMajor, majorSpan }) => {
+        const majorCell = startsMajor
+          ? `<td rowspan="${majorSpan}">${esc(major)}</td>`
           : "";
         return `<tr>${majorCell}<td><strong>${esc(item.small || item.middle || "名称未設定")}</strong>${item.middle && item.small ? `<small>${esc(item.middle)}</small>` : ""}${item.instruction ? `<small>${esc(item.instruction)}</small>` : ""}${log?.memo ? `<small>メモ：${esc(log.memo)}</small>` : ""}</td><td class="judge">${log ? "✓" : ""}</td><td>${log ? `${esc(log.user)}<small>${esc(log.date)}</small>` : ""}</td></tr>`;
       })
       .join("");
   }
   function reportWorkDate(logs) {
-    const dates = [...logs.values()]
-      .map((log) => String(log.date || "").match(/\d{4}\/\d{2}\/\d{2}/)?.[0])
-      .filter(Boolean)
-      .sort();
-    if (!dates.length) return "未完了";
-    const f = (value) => {
-      const [y, m, d] = value.split("/");
-      return `${y}年${Number(m)}月${Number(d)}日`;
-    };
-    return dates[0] === dates.at(-1)
-      ? f(dates[0])
-      : `${f(dates[0])}～${f(dates.at(-1))}`;
+    return reportModel.workDate(logs);
   }
   function reportHtml(serial, logs, options = {}) {
     const items = options.items || state.items,
@@ -620,23 +600,7 @@
     renderViewer();
   });
   function paginateReportItems(logs) {
-    const pages = [];
-    let page = [],
-      weight = 0;
-    state.items.forEach((item) => {
-      const log = logs.get(item.id),
-        text = [item.middle, item.small, item.instruction, log?.memo].join(""),
-        rowWeight = 1 + Math.floor(text.length / 75);
-      if (page.length && weight + rowWeight > 30) {
-        pages.push(page);
-        page = [];
-        weight = 0;
-      }
-      page.push(item);
-      weight += rowWeight;
-    });
-    if (page.length || !pages.length) pages.push(page);
-    return pages;
+    return reportModel.paginate(state.items, logs);
   }
   function printReports(list) {
     const popup = open("", "_blank");
@@ -762,20 +726,8 @@
       for (const url of previews.values())
         if (String(url).startsWith("blob:")) URL.revokeObjectURL(url);
       previews.clear();
-      (data.values || []).slice(1).forEach((r, index) => {
-        if (String(r[0]) !== state.serial) return;
-        const entry = {
-          url: r[2] || "",
-          thumb: r[3] || "",
-          id: r[4] || "",
-          date: r[5] || "",
-          user: r[6] || "",
-          thumbData: r[7] || "",
-          row: index + 2,
-        };
-        if (!photos.has(String(r[1]))) photos.set(String(r[1]), []);
-        photos.get(String(r[1])).push(entry);
-      });
+      photoModel.groupRows(data.values || [], state.serial)
+        .forEach((list, itemId) => photos.set(itemId, list));
       applyFeatures();
       photos.forEach((list, itemId) =>
         list.forEach((photo, index) => {
@@ -894,10 +846,9 @@
       freezePhoto(blob);
       const thumbData = await thumbnailData(blob);
       await ensurePhotoSheet();
-      const safe = state.serial.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 50);
       const file = await uploadPhoto(
         blob,
-        `InstaCheckList_${safe}_${Date.now()}.jpg`,
+        photoModel.filename(state.serial),
       );
       const date = localDate();
       await api(
@@ -909,16 +860,9 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             values: [
-              [
-                state.serial,
-                photoItemId,
-                file.webViewLink || "",
-                file.thumbnailLink || "",
-                file.id,
-                date,
-                state.userName,
-                thumbData,
-              ],
+              photoModel.toRow({ serial: state.serial, itemId: photoItemId,
+                url: file.webViewLink, thumb: file.thumbnailLink, id: file.id,
+                date, user: state.userName, thumbData }),
             ],
           }),
         },

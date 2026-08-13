@@ -1,6 +1,8 @@
 (() => {
   "use strict";
   const SHEET = window.InstaCheckListCore.SHEETS.settings,
+    validation = window.InstaCheckListValidation,
+    settingModel = window.InstaCheckListItemSettings,
     settings = new Map(),
     el = (id) => document.getElementById(id);
   let active = "serial",
@@ -27,6 +29,8 @@
   el("itemRegexInput").closest("label").hidden = true;
   const rule = (id) => settings.get(id) || {};
   function validate(label, value, r) {
+    return validation.formatErrors(label, validation.validateValue(value, r));
+    /* Legacy formatter retained below until all translated messages are centralized. */
     const errors = [],
       length = Number(r.length) || 0;
     if (length && [...value].length !== length)
@@ -96,6 +100,9 @@
             action: r[9] || "",
           }),
       );
+    const normalizedSettings = settingModel.parseRows(data.values || []);
+    settings.clear();
+    normalizedSettings.forEach((value, key) => settings.set(key, value));
     window.checklistProjectName = rule("project").startsWith || "";
     el("topbarProjectName").textContent = window.checklistProjectName || "案件名未設定";
     el("topbarProjectName").hidden = false;
@@ -154,7 +161,7 @@
       el("itemTitleInput").value = item.small || item.middle || "";
       el("itemDescriptionInput").value = item.instruction || "";
     }
-    const defaultAction=item&&/^(true|1|yes|on)$/i.test(String(item.uniqueLabel).trim())?"input":"check",action=serial?"input":r.action||defaultAction;
+    const action = settingModel.resolveAction(item, r, serial);
     document.querySelector(`[name="itemAction"][value="${action}"]`).checked=true;
     el("itemActionType").hidden=serial;el("itemValidationFields").hidden=action!=="input";
     el("itemLengthInputMoved").value = r.length || "";
@@ -208,17 +215,11 @@
       }
       await ensure();
       const action=active==='serial'?'input':document.querySelector('[name="itemAction"]:checked').value,old = settings.get(active),
-        row = [
-          active,
-          length,
-          regex,
-          reference.id || "",
-          reference.url || "",
-          reference.thumbData || "",
-          el("itemStartsWithInput").value,
-          el("itemIncludesInput").value,
-          el("itemEndsWithInput").value,action,
-        ];
+        row = settingModel.toRow({ id: active, length, regex,
+          imageId: reference.id, imageUrl: reference.url, thumbData: reference.thumbData,
+          startsWith: el("itemStartsWithInput").value,
+          includes: el("itemIncludesInput").value,
+          endsWith: el("itemEndsWithInput").value, action });
       if (old?.row)
         await valuesUpdate(`${SHEET}!A${old.row}:J${old.row}`, [row]);
       else
