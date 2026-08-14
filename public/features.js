@@ -59,9 +59,14 @@
     byId("projectNameInput").value = window.checklistProjectName || "";
     openModal("projectNameModal");
   });
+  const exportButton = document.createElement("button");
+  exportButton.id = "settingsExportBtn";
+  exportButton.type = "button";
+  exportButton.innerHTML = '<span class="material-symbols-rounded">file_export</span><span><strong>Pro版移行データ</strong><small>JSONを書き出す</small></span>';
+  byId("settingsModal").querySelector(".settings-grid").append(exportButton);
   const settingsGrid=byId("settingsModal").querySelector(".settings-grid");
   const settingsGroups=[
-    ["案件",["settingsProjectBtn","settingsViewerBtn","settingsShareBtn"]],
+    ["案件",["settingsProjectBtn","settingsViewerBtn","settingsShareBtn","settingsExportBtn"]],
     ["アプリ設定",["settingsLayoutBtn","settingsResetBtn"]],
     ["接続先",["settingsFileBtn","settingsFolderBtn","settingsSheetBtn"]],
   ];
